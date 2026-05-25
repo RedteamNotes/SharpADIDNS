@@ -126,8 +126,8 @@ SharpADIDNS.exe add \
     --data fe80::1 \
     --domain-dn DC=redteamnotes,DC=local \
     --server dc.redteamnotes.local \
-    --username 'redteamnotes\alice' \
-    --password 'P@ss' \
+    --username 'redteamnotes\redpen' \
+    --password 'RedteamN0t3s.' \
     --ldaps
 ```
 
