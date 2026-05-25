@@ -1,0 +1,15 @@
+# Claude Code session state
+.claude/
+
+# Build artifacts
+*.pdb
+*.obj
+*.suo
+*.user
+.vs/
+bin/
+obj/
+
+# IDE
+.idea/
+.vscode/
