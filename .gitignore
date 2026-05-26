@@ -9,6 +9,7 @@
 .vs/
 bin/
 obj/
+tests/Tests.exe
 
 # IDE
 .idea/

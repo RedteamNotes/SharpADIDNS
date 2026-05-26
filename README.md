@@ -33,6 +33,17 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 No third-party dependencies. A prebuilt binary tracking the current commit is provided under `release/SharpADIDNS.exe`.
 
+### Tests
+
+Unit tests cover the pure functions (no AD required): `Bin` endian helpers, `DnsRecord` builders + decoders, `DNS_COUNT_NAME` edge cases, tombstone FILETIME, `Json.Escape`. Build and run:
+
+```
+csc /main:TestRunner /r:System.DirectoryServices.dll /out:tests\Tests.exe tests\Tests.cs SharpADIDNS.cs
+tests\Tests.exe
+```
+
+Exit code 0 on pass, 1 on any failure. The `tests/Tests.exe` binary is ignored by git.
+
 ## Usage
 
 ```
