@@ -92,6 +92,17 @@ Restore from a backup file: pipe a relevant base64 blob into `add --raw <base64>
 - `add --name wpad` / `add --name isatap` -- GQBL-monitored names, heavily flagged by MDI / SIEM
 - `add --force` on a node with `dNSTombstoned=TRUE` -- un-tombstone is a known ADIDNS-abuse IOC
 
+### Enum filters (`enum` only)
+
+| Option | Description |
+| ------ | ----------- |
+| `--filter-type <T,...>` | Comma list of types. Shows nodes that have **at least one** record of these types. Accepted: `A`, `AAAA`, `CNAME`, `PTR`, `SRV`, `MX`, `TXT`, `NS`, `SOA`, `TS` (tombstone). |
+| `--filter-name <glob>`  | Match the node name (case-insensitive). `*` and `?` wildcards. Examples: `sql*`, `_*._tcp.*`, `?pad`. |
+| `--only-tombstoned`     | Show only tombstoned nodes. |
+| `--no-tombstoned`       | Hide tombstoned nodes (active only). |
+
+`--only-tombstoned` and `--no-tombstoned` are mutually exclusive. All filters are applied client-side after the LDAP fetch.
+
 ### Output
 
 | Option | Description |

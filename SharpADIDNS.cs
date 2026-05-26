@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace SharpADIDNS
 {
@@ -743,6 +744,12 @@ namespace SharpADIDNS
         // ------------- enum -------------
         public static int RunEnum(Options opt, string zoneDn)
         {
+            if (opt.OnlyTombstoned && opt.NoTombstoned)
+                throw new ArgumentException("--only-tombstoned and --no-tombstoned are mutually exclusive");
+
+            HashSet<ushort> typeSet = ParseTypeFilter(opt.FilterType);
+            Regex nameRegex = string.IsNullOrEmpty(opt.FilterName) ? null : GlobToRegex(opt.FilterName);
+
             using (DirectoryEntry zone = LdapOps.Open(opt, zoneDn))
             {
                 DirectoryServicesCOMException err;
@@ -756,6 +763,11 @@ namespace SharpADIDNS
                 }
 
                 Logger.Info(opt, "Enumerating dnsNode objects under: {0}", zoneDn);
+                if (typeSet != null || nameRegex != null || opt.OnlyTombstoned || opt.NoTombstoned)
+                    Logger.Info(opt, "Filters: type={0}  name={1}  tomb={2}",
+                        typeSet != null ? opt.FilterType : "*",
+                        nameRegex != null ? opt.FilterName : "*",
+                        opt.OnlyTombstoned ? "only" : (opt.NoTombstoned ? "exclude" : "any"));
 
                 using (DirectorySearcher searcher = new DirectorySearcher(zone))
                 {
@@ -767,15 +779,22 @@ namespace SharpADIDNS
                     searcher.PropertiesToLoad.Add("dnsRecord");
                     searcher.PropertiesToLoad.Add("dNSTombstoned");
 
-                    int total = 0, active = 0, tombstoned = 0;
+                    int fetched = 0, shown = 0, active = 0, tombstoned = 0;
                     using (SearchResultCollection results = searcher.FindAll())
                     {
                         foreach (SearchResult r in results)
                         {
-                            total++;
+                            fetched++;
                             string name = Prop(r, "name");
                             string tomb = Prop(r, "dNSTombstoned");
                             bool isTomb = tomb.Equals("True", StringComparison.OrdinalIgnoreCase);
+
+                            if (opt.OnlyTombstoned && !isTomb) continue;
+                            if (opt.NoTombstoned   &&  isTomb) continue;
+                            if (nameRegex != null && !nameRegex.IsMatch(name)) continue;
+                            if (typeSet != null && !HasMatchingTypeRecord(r, typeSet)) continue;
+
+                            shown++;
                             if (isTomb) tombstoned++; else active++;
 
                             Console.WriteLine();
@@ -800,7 +819,11 @@ namespace SharpADIDNS
                     }
 
                     Console.WriteLine();
-                    Logger.Ok("Total: {0} nodes ({1} active, {2} tombstoned)", total, active, tombstoned);
+                    if (fetched != shown)
+                        Logger.Ok("Shown: {0} nodes ({1} active, {2} tombstoned); {3} filtered out of {4} fetched",
+                            shown, active, tombstoned, fetched - shown, fetched);
+                    else
+                        Logger.Ok("Total: {0} nodes ({1} active, {2} tombstoned)", shown, active, tombstoned);
                 }
             }
             return ExitCodes.Success;
@@ -1252,6 +1275,72 @@ namespace SharpADIDNS
             bool v;
             return bool.TryParse(node.Properties["dNSTombstoned"].Value.ToString(), out v) && v;
         }
+
+        // -------- enum filter helpers --------
+        private static HashSet<ushort> ParseTypeFilter(string spec)
+        {
+            if (string.IsNullOrWhiteSpace(spec)) return null;
+            HashSet<ushort> set = new HashSet<ushort>();
+            foreach (string token in spec.Split(','))
+            {
+                string t = token.Trim();
+                if (t.Length == 0) continue;
+                set.Add(ParseTypeName(t));
+            }
+            return set.Count == 0 ? null : set;
+        }
+
+        private static ushort ParseTypeName(string s)
+        {
+            switch (s.ToUpperInvariant())
+            {
+                case "A":     return DnsRecord.TypeA;
+                case "AAAA":  return DnsRecord.TypeAaaa;
+                case "CNAME": return DnsRecord.TypeCname;
+                case "PTR":   return DnsRecord.TypePtr;
+                case "SRV":   return DnsRecord.TypeSrv;
+                case "MX":    return DnsRecord.TypeMx;
+                case "NS":    return DnsRecord.TypeNs;
+                case "TXT":   return DnsRecord.TypeTxt;
+                case "SOA":   return DnsRecord.TypeSoa;
+                case "TS":    return DnsRecord.TypeZero;
+                default:
+                    throw new ArgumentException("Unknown record type for --filter-type: " + s);
+            }
+        }
+
+        private static Regex GlobToRegex(string glob)
+        {
+            StringBuilder sb = new StringBuilder("^");
+            foreach (char c in glob)
+            {
+                switch (c)
+                {
+                    case '*': sb.Append(".*"); break;
+                    case '?': sb.Append('.');  break;
+                    case '\\': case '+': case '(': case ')': case '|':
+                    case '^': case '$': case '.': case '{': case '}':
+                    case '[': case ']':
+                        sb.Append('\\').Append(c); break;
+                    default: sb.Append(c); break;
+                }
+            }
+            sb.Append('$');
+            return new Regex(sb.ToString(), RegexOptions.IgnoreCase);
+        }
+
+        private static bool HasMatchingTypeRecord(SearchResult r, HashSet<ushort> typeSet)
+        {
+            if (!r.Properties.Contains("dnsRecord")) return false;
+            foreach (object o in r.Properties["dnsRecord"])
+            {
+                byte[] b = o as byte[];
+                if (b == null) continue;
+                ushort t = DnsRecord.GetType(b);
+                if (typeSet.Contains(t)) return true;
+            }
+            return false;
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1298,6 +1387,12 @@ namespace SharpADIDNS
         public bool   DryRun;
         public string BackupTo;
         public bool   Yes;
+
+        // Enum filters
+        public string FilterType;
+        public string FilterName;
+        public bool   OnlyTombstoned;
+        public bool   NoTombstoned;
 
         private static readonly HashSet<string> KnownActions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -1363,6 +1458,10 @@ namespace SharpADIDNS
                 else if (a == "--dry-run")                          o.DryRun   = true;
                 else if (a == "--backup-to" && i + 1 < args.Length) o.BackupTo = args[++i];
                 else if (a == "-y" || a == "--yes")                 o.Yes      = true;
+                else if (a == "--filter-type" && i + 1 < args.Length) o.FilterType = args[++i];
+                else if (a == "--filter-name" && i + 1 < args.Length) o.FilterName = args[++i];
+                else if (a == "--only-tombstoned")                  o.OnlyTombstoned = true;
+                else if (a == "--no-tombstoned")                    o.NoTombstoned   = true;
                 else
                     Logger.Warn("Ignored unknown argument: {0}", a);
             }
@@ -1389,6 +1488,7 @@ namespace SharpADIDNS
             PrintRecordData();
             PrintAuth();
             PrintSafety();
+            PrintEnumFilters();
             PrintOutput();
             PrintExitCodes();
             PrintExamples();
@@ -1487,6 +1587,18 @@ namespace SharpADIDNS
             Console.WriteLine("                           - 'add --force' on a tombstoned node");
             Console.WriteLine("                         Without a TTY and without --yes, high-risk ops");
             Console.WriteLine("                         refuse to run.");
+            Console.WriteLine();
+        }
+
+        private static void PrintEnumFilters()
+        {
+            Console.WriteLine("ENUM FILTERS  (enum only)");
+            Console.WriteLine("  --filter-type <T,...>  Comma list. Show nodes with at least one record");
+            Console.WriteLine("                         of these types: A,AAAA,CNAME,PTR,SRV,MX,TXT,NS,SOA,TS");
+            Console.WriteLine("  --filter-name <glob>   Match the node name; '*' and '?' wildcards,");
+            Console.WriteLine("                         case-insensitive (e.g. 'sql*' or '_*._tcp.*')");
+            Console.WriteLine("  --only-tombstoned      Show only tombstoned nodes");
+            Console.WriteLine("  --no-tombstoned        Hide tombstoned nodes (active only)");
             Console.WriteLine();
         }
 
