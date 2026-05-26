@@ -69,6 +69,8 @@ namespace SharpADIDNS
                     return ExitCodes.UsageError;
                 }
 
+                Credentials.Resolve(opt);
+
                 string zoneDn = LdapOps.BuildZoneDn(opt.Zone, opt.Partition, opt.DomainDn);
 
                 Logger.Verbose(opt, "Action:     {0}", opt.Action);
@@ -1071,6 +1073,9 @@ namespace SharpADIDNS
         // Auth
         public string Username;
         public string Password;
+        public bool   PasswordStdin;
+        public string PasswordEnvVar;
+        public bool   AllowCleartextPassword;
         public bool   Ldaps;
 
         // Output
@@ -1127,6 +1132,9 @@ namespace SharpADIDNS
                 }
                 else if (a == "--username" && i + 1 < args.Length) o.Username = args[++i];
                 else if (a == "--password" && i + 1 < args.Length) o.Password = args[++i];
+                else if (a == "--password-stdin")                  o.PasswordStdin = true;
+                else if (a == "--password-env" && i + 1 < args.Length) o.PasswordEnvVar = args[++i];
+                else if (a == "--allow-cleartext-password")        o.AllowCleartextPassword = true;
                 else if (a == "--ldaps")                            o.Ldaps    = true;
                 else if (a == "--force")                            o.Force    = true;
                 else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
@@ -1135,10 +1143,7 @@ namespace SharpADIDNS
                     Logger.Warn("Ignored unknown argument: {0}", a);
             }
 
-            // Cross-arg validation
-            if (!string.IsNullOrEmpty(o.Username) && o.Password == null)
-                throw new ArgumentException("--username requires --password");
-
+            // Password resolution happens after Parse via Credentials.Resolve(opt) -- see Program.Main.
             return o;
         }
 
@@ -1214,9 +1219,16 @@ namespace SharpADIDNS
         private static void PrintAuth()
         {
             Console.WriteLine("AUTHENTICATION");
-            Console.WriteLine("  --username <user>      UPN or DOMAIN\\user      (default: current process token)");
-            Console.WriteLine("  --password <pwd>       Cleartext password      (required with --username)");
-            Console.WriteLine("  --ldaps                Bind over LDAPS (port 636)");
+            Console.WriteLine("  --username <user>           UPN or DOMAIN\\user  (default: current process token)");
+            Console.WriteLine("  --password <pwd>            Cleartext password (visible in process listing).");
+            Console.WriteLine("                              Warns unless --allow-cleartext-password.");
+            Console.WriteLine("  --password-stdin            Read password from stdin (one line)");
+            Console.WriteLine("  --password-env <VAR>        Read password from environment variable");
+            Console.WriteLine("  --allow-cleartext-password  Silence the --password cleartext warning");
+            Console.WriteLine("  --ldaps                     Bind over LDAPS (port 636)");
+            Console.WriteLine();
+            Console.WriteLine("  When --username is given without any password source, the password is");
+            Console.WriteLine("  prompted interactively (input not echoed). Fails if stdin is redirected.");
             Console.WriteLine();
         }
 
@@ -1280,6 +1292,93 @@ namespace SharpADIDNS
             Console.WriteLine("  * Wildcard ('*') records hijack every unresolved name in the zone.");
             Console.WriteLine("    Use 'enum' first to confirm you are not stomping legitimate data.");
             Console.WriteLine();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Credential input resolution
+    // -----------------------------------------------------------------------
+    internal static class Credentials
+    {
+        public static void Resolve(Options opt)
+        {
+            if (string.IsNullOrEmpty(opt.Username)) return;
+
+            int sources = 0;
+            if (opt.Password != null)                       sources++;
+            if (opt.PasswordStdin)                          sources++;
+            if (!string.IsNullOrEmpty(opt.PasswordEnvVar))  sources++;
+
+            if (sources > 1)
+                throw new ArgumentException(
+                    "Specify at most one of --password / --password-stdin / --password-env");
+
+            if (opt.Password != null)
+            {
+                if (!opt.AllowCleartextPassword)
+                    Logger.Warn(
+                        "--password is visible in process listings (Sysmon EID 1, " +
+                        "Win32_Process commandLine) and shell history. Prefer " +
+                        "--password-stdin, --password-env <VAR>, or omit it to be " +
+                        "prompted. Use --allow-cleartext-password to silence this.");
+                return;
+            }
+
+            if (opt.PasswordStdin)
+            {
+                opt.Password = ReadOneLineFromStdin();
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(opt.PasswordEnvVar))
+            {
+                string val = Environment.GetEnvironmentVariable(opt.PasswordEnvVar);
+                if (val == null)
+                    throw new ArgumentException(
+                        "--password-env " + opt.PasswordEnvVar +
+                        " is not set in this process environment");
+                opt.Password = val;
+                return;
+            }
+
+            // No source given. Auto-prompt if interactive; refuse otherwise.
+            if (Console.IsInputRedirected)
+                throw new ArgumentException(
+                    "--username given without a password source and stdin is " +
+                    "redirected. Use --password-stdin, --password-env <VAR>, or " +
+                    "--password <pwd> (with --allow-cleartext-password), or run " +
+                    "interactively.");
+
+            opt.Password = PromptMasked("Password for " + opt.Username + ": ");
+        }
+
+        private static string ReadOneLineFromStdin()
+        {
+            string line = Console.In.ReadLine();
+            if (line == null)
+                throw new ArgumentException(
+                    "--password-stdin: stdin closed before any input was received");
+            return line;
+        }
+
+        private static string PromptMasked(string prompt)
+        {
+            Console.Error.Write(prompt);
+            StringBuilder sb = new StringBuilder();
+            while (true)
+            {
+                ConsoleKeyInfo k = Console.ReadKey(true);
+                if (k.Key == ConsoleKey.Enter) break;
+                if (k.Key == ConsoleKey.Backspace)
+                {
+                    if (sb.Length > 0) sb.Length--;
+                    continue;
+                }
+                if (k.KeyChar == '\0') continue;
+                sb.Append(k.KeyChar);
+            }
+            Console.Error.WriteLine();
+            return sb.ToString();
         }
     }
 }

@@ -62,9 +62,14 @@ SharpADIDNS.exe <action> [options]
 
 | Option | Description |
 | ------ | ----------- |
-| `--username <user>` | UPN or `DOMAIN\user`. Default: current process token. |
-| `--password <pwd>`  | Cleartext password. Required with `--username`. |
-| `--ldaps`           | Bind over LDAPS (port 636) |
+| `--username <user>`          | UPN or `DOMAIN\user`. Default: current process token. |
+| `--password <pwd>`           | Cleartext password. Visible in process listings, Sysmon EID 1, and shell history; emits a warning unless `--allow-cleartext-password` is also passed. |
+| `--password-stdin`           | Read password from stdin (one line). |
+| `--password-env <VAR>`       | Read password from the named environment variable. |
+| `--allow-cleartext-password` | Silence the `--password` cleartext warning. |
+| `--ldaps`                    | Bind over LDAPS (port 636). |
+
+When `--username` is given without any password source, the password is prompted interactively (input not echoed). If stdin is redirected (CI, piped scripts), the run errors out with usage code 1 instead of silently waiting.
 
 ### Output
 
