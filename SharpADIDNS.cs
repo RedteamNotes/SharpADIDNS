@@ -42,6 +42,10 @@ namespace SharpADIDNS
 
                 Options opt = Options.Parse(args);
 
+                Logger.ColorEnabled = opt.NoColor ? false :
+                                      opt.Color ? true :
+                                      !Console.IsOutputRedirected;
+
                 if (opt.ShowVersion)
                 {
                     Console.WriteLine("SharpADIDNS v" + Version);
@@ -160,35 +164,49 @@ namespace SharpADIDNS
     }
 
     // -----------------------------------------------------------------------
-    // Output helpers (respect --quiet / --verbose)
+    // Output helpers (respect --quiet / --verbose; ANSI color when enabled)
     // -----------------------------------------------------------------------
     internal static class Logger
     {
+        public static bool ColorEnabled = false;
+
+        private const string Reset    = "[0m";
+        private const string FgGreen  = "[32m";
+        private const string FgRed    = "[31m";
+        private const string FgYellow = "[33m";
+        private const string FgCyan   = "[36m";
+        private const string FgGray   = "[90m";
+
+        private static string Mark(string ansi, string text)
+        {
+            return ColorEnabled ? ansi + text + Reset : text;
+        }
+
         public static void Info(Options opt, string fmt, params object[] args)
         {
             if (opt != null && opt.Quiet) return;
-            Console.WriteLine("[*] " + fmt, args);
+            Console.WriteLine(Mark(FgCyan, "[*]") + " " + fmt, args);
         }
 
         public static void Ok(string fmt, params object[] args)
         {
-            Console.WriteLine("[+] " + fmt, args);
+            Console.WriteLine(Mark(FgGreen, "[+]") + " " + fmt, args);
         }
 
         public static void Verbose(Options opt, string fmt, params object[] args)
         {
             if (opt == null || !opt.Verbose) return;
-            Console.WriteLine("[v] " + fmt, args);
+            Console.WriteLine(Mark(FgGray, "[v]") + " " + fmt, args);
         }
 
         public static void Warn(string fmt, params object[] args)
         {
-            Console.Error.WriteLine("[!] " + fmt, args);
+            Console.Error.WriteLine(Mark(FgYellow, "[!]") + " " + fmt, args);
         }
 
         public static void Err(string fmt, params object[] args)
         {
-            Console.Error.WriteLine("[-] " + fmt, args);
+            Console.Error.WriteLine(Mark(FgRed, "[-]") + " " + fmt, args);
         }
     }
 
@@ -1834,6 +1852,8 @@ namespace SharpADIDNS
         public bool Verbose;
         public bool Quiet;
         public string Format = "text";
+        public bool Color;
+        public bool NoColor;
 
         // Safety
         public bool   DryRun;
@@ -1854,6 +1874,9 @@ namespace SharpADIDNS
 
         public static Options Parse(string[] args)
         {
+            // Expand @argfile.txt before parsing.
+            args = ExpandArgfiles(args);
+
             Options o = new Options();
 
             for (int i = 0; i < args.Length; i++)
@@ -1911,6 +1934,8 @@ namespace SharpADIDNS
                 else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
                 else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
                 else if (a == "--format" && i + 1 < args.Length)    o.Format   = args[++i].ToLowerInvariant();
+                else if (a == "--color")                            o.Color    = true;
+                else if (a == "--no-color")                         o.NoColor  = true;
                 else if (a == "--dry-run")                          o.DryRun   = true;
                 else if (a == "--backup-to" && i + 1 < args.Length) o.BackupTo = args[++i];
                 else if (a == "-y" || a == "--yes")                 o.Yes      = true;
@@ -1936,6 +1961,39 @@ namespace SharpADIDNS
             return v;
         }
 
+        private static string[] ExpandArgfiles(string[] args)
+        {
+            List<string> expanded = new List<string>();
+            foreach (string a in args)
+            {
+                if (a == null || a.Length < 2 || a[0] != '@')
+                {
+                    expanded.Add(a);
+                    continue;
+                }
+
+                string path = a.Substring(1);
+                string content;
+                try { content = File.ReadAllText(path); }
+                catch (Exception ex)
+                {
+                    throw new ArgumentException(
+                        "Could not read argfile '" + path + "': " + ex.Message);
+                }
+
+                foreach (string rawLine in content.Split('\n'))
+                {
+                    string line = rawLine.Trim();
+                    if (line.Length == 0) continue;
+                    if (line[0] == '#') continue;
+                    foreach (string tok in line.Split(
+                        new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+                        expanded.Add(tok);
+                }
+            }
+            return expanded.ToArray();
+        }
+
         // ----- Help -----
         public static void PrintUsage()
         {
@@ -1959,6 +2017,9 @@ namespace SharpADIDNS
             Console.WriteLine("SharpADIDNS v" + Program.Version + "  --  AD-Integrated DNS manipulation via LDAP");
             Console.WriteLine("https://github.com/RedteamNotes/SharpADIDNS");
             Console.WriteLine("By @RedteamNotes   Email: 888256@gmail.com");
+            Console.WriteLine();
+            Console.WriteLine("  Tip: any argument may be replaced by '@file.txt' to read more args");
+            Console.WriteLine("  from that file (one per whitespace; '#' starts a line comment).");
             Console.WriteLine();
         }
 
@@ -2078,6 +2139,8 @@ namespace SharpADIDNS
             Console.WriteLine("  --format <text|json>   Output format for enum / query / list-zones");
             Console.WriteLine("                         (default: text). JSON is single-line, suitable");
             Console.WriteLine("                         for piping through 'jq'.");
+            Console.WriteLine("  --color                Force ANSI color in output");
+            Console.WriteLine("  --no-color             Disable ANSI color (default: auto-detect TTY)");
             Console.WriteLine("  -h, --help             Show this help");
             Console.WriteLine("  -V, --version          Print version and exit");
             Console.WriteLine();

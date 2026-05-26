@@ -127,8 +127,25 @@ Restore from a backup file: pipe a relevant base64 blob into `add --raw <base64>
 | `-v`, `--verbose`        | Print DNs, raw blobs, bind details |
 | `-q`, `--quiet`          | Suppress `[*]` info lines |
 | `--format <text\|json>`  | Output format for `enum` / `query` / `list-zones` (default: `text`). JSON is single-line, suitable for piping through `jq`. |
+| `--color` / `--no-color` | Force or disable ANSI color (default: auto-detect TTY). |
 | `-h`, `--help`           | Show full help |
 | `-V`, `--version`        | Print version and exit |
+
+### Argument files
+
+Any argument starting with `@` is treated as a path to a text file whose contents are spliced into the argument stream. One token per whitespace; lines beginning with `#` are comments. Useful for keeping long, repeated targeting flags out of every command:
+
+```
+# common.args
+--zone redteamnotes.local
+--dn   DC=redteamnotes,DC=local
+--server dc.redteamnotes.local
+```
+
+```bash
+SharpADIDNS.exe enum @common.args
+SharpADIDNS.exe query @common.args --name sccm
+```
 
 ### Exit codes
 
