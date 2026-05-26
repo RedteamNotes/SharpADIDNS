@@ -28,7 +28,7 @@ namespace SharpADIDNS
     // -----------------------------------------------------------------------
     internal static class Program
     {
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
 
         private static int Main(string[] args)
         {
