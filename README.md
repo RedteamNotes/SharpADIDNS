@@ -75,6 +75,7 @@ SharpADIDNS.exe <action> [options]
 | `--raw <base64>`    | Pre-built `dnsRecord` blob; bypasses `--type` / `--data` and the SRV/MX flags |
 | `--ttl <sec>`       | 1..604800 (default: 600) |
 | `--force`           | Replace records of the same type on an existing node. Records of other types on the same node are preserved. |
+| `--append`          | Keep **all** existing records on the node and add one more. Mutually exclusive with `--force`. Refuses on tombstoned nodes -- use `--force` to un-tombstone+write. |
 
 ### Authentication
 

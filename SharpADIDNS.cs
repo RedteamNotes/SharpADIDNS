@@ -1263,31 +1263,51 @@ namespace SharpADIDNS
                     if (LdapOps.TryBind(node, out nodeErr))
                     {
                         nodeExists = true;
-                        if (!opt.Force)
+                        if (opt.Force && opt.Append)
+                        {
+                            Logger.Err("--force and --append are mutually exclusive");
+                            return ExitCodes.UsageError;
+                        }
+                        if (!opt.Force && !opt.Append)
                         {
                             Logger.Err("Node already exists: {0}", nodeDn);
-                            Logger.Err("Use --force to replace records of type {0} on this node",
+                            Logger.Err("Use --force to replace records of type {0} on this node,",
                                 DnsRecord.TypeName(recordType));
+                            Logger.Err("or --append to add this record alongside the existing ones.");
+                            return ExitCodes.UsageError;
+                        }
+                        if (opt.Append && IsTombstoned(node))
+                        {
+                            Logger.Err("--append refuses on tombstoned node: use --force to un-tombstone");
                             return ExitCodes.UsageError;
                         }
 
                         if (opt.DryRun)
                         {
-                            PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, node);
+                            PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, node, opt.Append);
                             return ExitCodes.Success;
                         }
 
                         if (!Safety.ConfirmIfHighRisk(opt, node))
                             return ExitCodes.UsageError;
 
-                        Backup.Snapshot(opt, nodeDn, "add(force-replace)", node);
+                        Backup.Snapshot(opt, nodeDn,
+                            opt.Append ? "add(append)" : "add(force-replace)", node);
 
-                        // B1 fix: preserve other record types on the same node
-                        ReplaceSameTypeRecord(node, record, recordType);
-                        SetTombstoneFalse(node);
-                        node.CommitChanges();
-
-                        Logger.Ok("Updated {0} record", DnsRecord.TypeName(recordType));
+                        if (opt.Append)
+                        {
+                            node.Properties["dnsRecord"].Add(record);
+                            node.CommitChanges();
+                            Logger.Ok("Appended {0} record (existing records kept)", DnsRecord.TypeName(recordType));
+                        }
+                        else
+                        {
+                            // B1 fix: preserve other record types on the same node
+                            ReplaceSameTypeRecord(node, record, recordType);
+                            SetTombstoneFalse(node);
+                            node.CommitChanges();
+                            Logger.Ok("Updated {0} record", DnsRecord.TypeName(recordType));
+                        }
                         Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
                         Logger.Ok("DN: {0}", nodeDn);
                         return ExitCodes.Success;
@@ -1307,7 +1327,7 @@ namespace SharpADIDNS
                 {
                     if (opt.DryRun)
                     {
-                        PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, null);
+                        PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, null, false);
                         return ExitCodes.Success;
                     }
 
@@ -1495,12 +1515,17 @@ namespace SharpADIDNS
         // -------- dry-run plan printers --------
         private static void PrintAddPlan(Options opt, string nodeDn, byte[] newRecord,
                                          ushort recordType, string dataDesc,
-                                         DirectoryEntry existingNode)
+                                         DirectoryEntry existingNode, bool appendMode)
         {
             bool nodeExists = existingNode != null;
-            string mode = nodeExists
-                ? "replace same-type " + DnsRecord.TypeName(recordType) + " on existing node"
-                : "create new dnsNode";
+            string mode;
+            if (!nodeExists)
+                mode = "create new dnsNode";
+            else if (appendMode)
+                mode = "append " + DnsRecord.TypeName(recordType) + " to existing node";
+            else
+                mode = "replace same-type " + DnsRecord.TypeName(recordType) + " on existing node";
+
             Console.WriteLine("[dry-run] add ({0}):", mode);
             Console.WriteLine("[dry-run]   DN:        {0}", nodeDn);
             Console.WriteLine("[dry-run]   {0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
@@ -1512,8 +1537,11 @@ namespace SharpADIDNS
             {
                 int existingCount = existingNode.Properties.Contains("dnsRecord")
                     ? existingNode.Properties["dnsRecord"].Count : 0;
-                Console.WriteLine("[dry-run]   Existing:  {0} record(s) on node (other types preserved)",
-                    existingCount);
+                if (appendMode)
+                    Console.WriteLine("[dry-run]   Existing:  {0} record(s) on node (all preserved)", existingCount);
+                else
+                    Console.WriteLine("[dry-run]   Existing:  {0} record(s) on node (other types preserved)",
+                        existingCount);
                 if (IsTombstoned(existingNode))
                     Console.WriteLine("[dry-run]   Note:      node is currently TOMBSTONED; --force would un-tombstone");
             }
@@ -1788,6 +1816,7 @@ namespace SharpADIDNS
         public int    Ttl = 600;
         public string RawBase64;
         public bool   Force;
+        public bool   Append;
         public int    SrvPriority = 0;
         public int    SrvWeight   = 0;
         public int    SrvPort     = -1;
@@ -1878,6 +1907,7 @@ namespace SharpADIDNS
                 else if (a == "--allow-cleartext-password")        o.AllowCleartextPassword = true;
                 else if (a == "--ldaps")                            o.Ldaps    = true;
                 else if (a == "--force")                            o.Force    = true;
+                else if (a == "--append")                           o.Append   = true;
                 else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
                 else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
                 else if (a == "--format" && i + 1 < args.Length)    o.Format   = args[++i].ToLowerInvariant();
@@ -1981,6 +2011,9 @@ namespace SharpADIDNS
             Console.WriteLine("  --ttl <seconds>        TTL, 1..604800                            (default: 600)");
             Console.WriteLine("  --force                Replace SAME-type records on existing node;");
             Console.WriteLine("                         other record types on the same node are preserved");
+            Console.WriteLine("  --append               Keep ALL existing records on the node and add one");
+            Console.WriteLine("                         more. Mutually exclusive with --force. Refuses on");
+            Console.WriteLine("                         tombstoned nodes (use --force to un-tombstone).");
             Console.WriteLine();
         }
 
