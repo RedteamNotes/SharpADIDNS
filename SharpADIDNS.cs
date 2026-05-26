@@ -4,6 +4,8 @@ using System.DirectoryServices;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -875,6 +877,8 @@ namespace SharpADIDNS
                         Console.WriteLine("    Base64: {0}", Convert.ToBase64String(data));
                     DnsRecord.Decode(data, "    ");
                 }
+
+                PrintNodePermissions(opt, node);
             }
             return ExitCodes.Success;
         }
@@ -1340,6 +1344,89 @@ namespace SharpADIDNS
                 if (typeSet.Contains(t)) return true;
             }
             return false;
+        }
+
+        // -------- query permissions printer --------
+        private static void PrintNodePermissions(Options opt, DirectoryEntry node)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[*] Permissions:");
+
+            ActiveDirectorySecurity sec;
+            try
+            {
+                sec = node.ObjectSecurity;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Could not read nTSecurityDescriptor: {0}", ex.Message);
+                return;
+            }
+
+            if (sec == null)
+            {
+                Console.WriteLine("    <security descriptor unavailable>");
+                return;
+            }
+
+            // Owner
+            try
+            {
+                IdentityReference owner = sec.GetOwner(typeof(NTAccount));
+                Console.WriteLine("    Owner: {0}", owner != null ? owner.Value : "<null>");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("    Owner: <error: {0}>", ex.Message);
+            }
+
+            // Group (rarely useful but cheap)
+            try
+            {
+                IdentityReference grp = sec.GetGroup(typeof(NTAccount));
+                if (grp != null && opt.Verbose)
+                    Console.WriteLine("    Group: {0}", grp.Value);
+            }
+            catch { /* ignored */ }
+
+            // DACL
+            AuthorizationRuleCollection rules;
+            try
+            {
+                rules = sec.GetAccessRules(true, true, typeof(NTAccount));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("    ACEs: <error: {0}>", ex.Message);
+                return;
+            }
+
+            int explicitCount = 0, inheritedCount = 0;
+            List<ActiveDirectoryAccessRule> shown = new List<ActiveDirectoryAccessRule>();
+            foreach (AuthorizationRule rule in rules)
+            {
+                ActiveDirectoryAccessRule ar = rule as ActiveDirectoryAccessRule;
+                if (ar == null) continue;
+                if (ar.IsInherited) inheritedCount++;
+                else                explicitCount++;
+                if (opt.Verbose || !ar.IsInherited) shown.Add(ar);
+            }
+
+            if (opt.Verbose)
+                Console.WriteLine("    ACEs: {0} explicit, {1} inherited", explicitCount, inheritedCount);
+            else
+                Console.WriteLine("    ACEs: {0} explicit, {1} inherited (use -v to expand inherited)",
+                    explicitCount, inheritedCount);
+
+            foreach (ActiveDirectoryAccessRule ar in shown)
+            {
+                string id = ar.IdentityReference != null ? ar.IdentityReference.Value : "<null>";
+                Console.WriteLine("      {0,-5} {1,-48} {2}{3}",
+                    ar.AccessControlType,
+                    id,
+                    ar.ActiveDirectoryRights,
+                    ar.IsInherited ? "  [inherited]" : "");
+            }
         }
     }
 

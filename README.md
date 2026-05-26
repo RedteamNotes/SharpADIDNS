@@ -9,7 +9,7 @@ Built around `System.DirectoryServices`. Targets .NET Framework 4.x and produces
 | Action  | Description |
 | ------- | ----------- |
 | enum    | List every `dnsNode` under a zone, with type and value summary |
-| query   | Read one node and decode each `dnsRecord` blob in detail |
+| query   | Read one node and decode each `dnsRecord` blob in detail, plus an owner + DACL summary |
 | add     | Create or update a record (A, AAAA, CNAME, TXT, or raw blob) |
 | disable | Tombstone the node (soft delete; object stays in AD) |
 | remove  | Hard-delete the `dnsNode` object |
