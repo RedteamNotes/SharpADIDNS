@@ -73,6 +73,7 @@ SharpADIDNS.exe <action> [options]
 | `-v`, `--verbose` | Print DNs, raw blobs, bind details |
 | `-q`, `--quiet`   | Suppress `[*]` info lines |
 | `-h`, `--help`    | Show full help |
+| `-V`, `--version` | Print version and exit |
 
 ### Exit codes
 

@@ -25,6 +25,8 @@ namespace SharpADIDNS
     // -----------------------------------------------------------------------
     internal static class Program
     {
+        public const string Version = "0.0.5";
+
         private static int Main(string[] args)
         {
             try
@@ -36,6 +38,12 @@ namespace SharpADIDNS
                 }
 
                 Options opt = Options.Parse(args);
+
+                if (opt.ShowVersion)
+                {
+                    Console.WriteLine("SharpADIDNS v" + Version);
+                    return ExitCodes.Success;
+                }
 
                 if (opt.ShowHelp)
                 {
@@ -1044,6 +1052,7 @@ namespace SharpADIDNS
         // Action
         public string Action;
         public bool   ShowHelp;
+        public bool   ShowVersion;
 
         // Targeting
         public string Zone;
@@ -1091,6 +1100,12 @@ namespace SharpADIDNS
                 if (a == "-h" || a == "--help" || a == "/?" || a == "/help")
                 {
                     o.ShowHelp = true;
+                    continue;
+                }
+
+                if (a == "-V" || a == "--version")
+                {
+                    o.ShowVersion = true;
                     continue;
                 }
 
@@ -1145,7 +1160,7 @@ namespace SharpADIDNS
         private static void PrintHeader()
         {
             Console.WriteLine();
-            Console.WriteLine("SharpADIDNS  --  AD-Integrated DNS manipulation via LDAP");
+            Console.WriteLine("SharpADIDNS v" + Program.Version + "  --  AD-Integrated DNS manipulation via LDAP");
             Console.WriteLine("https://github.com/RedteamNotes/SharpADIDNS");
             Console.WriteLine("By @RedteamNotes   Email: 888256@gmail.com");
             Console.WriteLine();
@@ -1211,6 +1226,7 @@ namespace SharpADIDNS
             Console.WriteLine("  -v, --verbose          Print DNs, raw blobs, bind details");
             Console.WriteLine("  -q, --quiet            Suppress [*] info lines");
             Console.WriteLine("  -h, --help             Show this help");
+            Console.WriteLine("  -V, --version          Print version and exit");
             Console.WriteLine();
         }
 
