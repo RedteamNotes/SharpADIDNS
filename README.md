@@ -31,7 +31,9 @@ csc /optimize+ /r:System.DirectoryServices.dll /out:SharpADIDNS.exe SharpADIDNS.
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 ```
 
-No third-party dependencies. A prebuilt binary tracking the current commit is provided under `release/SharpADIDNS.exe`.
+No third-party dependencies.
+
+**Prebuilt binary**: download `SharpADIDNS.exe` from the [Releases page](https://github.com/RedteamNotes/SharpADIDNS/releases/latest) (CI attaches a fresh build to every tagged release). To build from source, follow the `csc` command above. The `release/` directory is not tracked in the repo.
 
 ### Tests
 

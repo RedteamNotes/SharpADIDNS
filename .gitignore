@@ -9,6 +9,7 @@
 .vs/
 bin/
 obj/
+release/
 tests/Tests.exe
 
 # IDE

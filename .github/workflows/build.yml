@@ -1,0 +1,75 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write   # required to attach assets to a release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate csc.exe
+        id: csc
+        shell: pwsh
+        run: |
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          if (-not (Test-Path $csc)) { throw "csc.exe not found at $csc" }
+          "csc=$csc" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Build SharpADIDNS.exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          & "${{ steps.csc.outputs.csc }}" /nologo /optimize+ `
+            /r:System.DirectoryServices.dll `
+            /out:release\SharpADIDNS.exe SharpADIDNS.cs
+          if ($LASTEXITCODE -ne 0) { throw "Build failed (exit $LASTEXITCODE)" }
+
+      - name: Build tests
+        shell: pwsh
+        run: |
+          & "${{ steps.csc.outputs.csc }}" /nologo /main:TestRunner `
+            /r:System.DirectoryServices.dll `
+            /out:tests\Tests.exe `
+            tests\Tests.cs SharpADIDNS.cs
+          if ($LASTEXITCODE -ne 0) { throw "Test build failed (exit $LASTEXITCODE)" }
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          & tests\Tests.exe
+          if ($LASTEXITCODE -ne 0) { throw "Tests failed (exit $LASTEXITCODE)" }
+
+      - name: Print build metadata
+        shell: pwsh
+        run: |
+          $h  = (Get-FileHash -Algorithm SHA256 release\SharpADIDNS.exe).Hash
+          $sz = (Get-Item release\SharpADIDNS.exe).Length
+          Write-Host "SHA256: $h"
+          Write-Host "Size:   $sz bytes"
+          & .\release\SharpADIDNS.exe --version
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SharpADIDNS-${{ github.sha }}
+          path: release/SharpADIDNS.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/SharpADIDNS.exe
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
