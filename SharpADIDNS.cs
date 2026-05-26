@@ -76,6 +76,9 @@ namespace SharpADIDNS
 
                 Credentials.Resolve(opt);
 
+                if (Replication.CheckBeforeAction(opt) != ExitCodes.Success)
+                    return ExitCodes.UsageError;
+
                 string zoneDn = needsZone ? LdapOps.BuildZoneDn(opt.Zone, opt.Partition, opt.DomainDn) : null;
 
                 Logger.Verbose(opt, "Action:     {0}", opt.Action);
@@ -1807,6 +1810,8 @@ namespace SharpADIDNS
         public bool   DryRun;
         public string BackupTo;
         public bool   Yes;
+        public bool   RequirePdc;
+        public bool   ShowPdc;
 
         // Enum filters
         public string FilterType;
@@ -1879,6 +1884,8 @@ namespace SharpADIDNS
                 else if (a == "--dry-run")                          o.DryRun   = true;
                 else if (a == "--backup-to" && i + 1 < args.Length) o.BackupTo = args[++i];
                 else if (a == "-y" || a == "--yes")                 o.Yes      = true;
+                else if (a == "--require-pdc")                      o.RequirePdc = true;
+                else if (a == "--show-pdc")                         o.ShowPdc    = true;
                 else if (a == "--filter-type" && i + 1 < args.Length) o.FilterType = args[++i];
                 else if (a == "--filter-name" && i + 1 < args.Length) o.FilterName = args[++i];
                 else if (a == "--only-tombstoned")                  o.OnlyTombstoned = true;
@@ -2009,6 +2016,12 @@ namespace SharpADIDNS
             Console.WriteLine("                           - 'add --force' on a tombstoned node");
             Console.WriteLine("                         Without a TTY and without --yes, high-risk ops");
             Console.WriteLine("                         refuse to run.");
+            Console.WriteLine("  --show-pdc             Look up and print the PDC emulator hostname");
+            Console.WriteLine("                         before running the action.");
+            Console.WriteLine("  --require-pdc          Error out unless --server matches the PDC.");
+            Console.WriteLine("                         Avoids writing to a non-PDC replica whose change");
+            Console.WriteLine("                         takes minutes to propagate (and shows up in");
+            Console.WriteLine("                         replPropertyMetaData under a non-PDC DSA).");
             Console.WriteLine();
         }
 
@@ -2312,6 +2325,95 @@ namespace SharpADIDNS
             }
 
             return null;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Replication awareness (PDC emulator detection)
+    // -----------------------------------------------------------------------
+    internal static class Replication
+    {
+        public static int CheckBeforeAction(Options opt)
+        {
+            if (!opt.RequirePdc && !opt.ShowPdc) return ExitCodes.Success;
+
+            string pdc = GetPdcHostname(opt);
+            if (pdc == null)
+            {
+                if (opt.RequirePdc)
+                {
+                    Logger.Err("--require-pdc: could not determine the PDC emulator");
+                    return ExitCodes.LdapError;
+                }
+                Logger.Warn("--show-pdc: could not determine the PDC emulator");
+                return ExitCodes.Success;
+            }
+
+            Logger.Info(opt, "PDC emulator: {0}", pdc);
+
+            if (!opt.RequirePdc) return ExitCodes.Success;
+
+            if (string.IsNullOrEmpty(opt.Server))
+            {
+                Logger.Err("--require-pdc: no --server given; cannot verify the target is the PDC");
+                return ExitCodes.UsageError;
+            }
+
+            if (!opt.Server.Equals(pdc, StringComparison.OrdinalIgnoreCase) &&
+                !FirstLabelMatches(opt.Server, pdc))
+            {
+                Logger.Err("--require-pdc: --server '{0}' does not match PDC emulator '{1}'", opt.Server, pdc);
+                return ExitCodes.UsageError;
+            }
+
+            Logger.Ok("--require-pdc: --server is the PDC emulator");
+            return ExitCodes.Success;
+        }
+
+        private static bool FirstLabelMatches(string a, string b)
+        {
+            if (a == null || b == null) return false;
+            string la = a.Split('.')[0];
+            string lb = b.Split('.')[0];
+            return la.Equals(lb, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string GetPdcHostname(Options opt)
+        {
+            try
+            {
+                string defaultNc;
+                using (DirectoryEntry rootDse = LdapOps.Open(opt, "rootDSE"))
+                {
+                    if (!rootDse.Properties.Contains("defaultNamingContext")) return null;
+                    defaultNc = rootDse.Properties["defaultNamingContext"].Value as string;
+                    if (string.IsNullOrEmpty(defaultNc)) return null;
+                }
+
+                string fsmoOwner;
+                using (DirectoryEntry domain = LdapOps.Open(opt, defaultNc))
+                {
+                    if (!domain.Properties.Contains("fSMORoleOwner")) return null;
+                    fsmoOwner = domain.Properties["fSMORoleOwner"].Value as string;
+                    if (string.IsNullOrEmpty(fsmoOwner)) return null;
+                }
+
+                // fSMORoleOwner = "CN=NTDS Settings,CN=<dc>,CN=Servers,..."
+                int comma = fsmoOwner.IndexOf(',');
+                if (comma < 0) return null;
+                string serverDn = fsmoOwner.Substring(comma + 1);
+
+                using (DirectoryEntry server = LdapOps.Open(opt, serverDn))
+                {
+                    if (!server.Properties.Contains("dNSHostName")) return null;
+                    return server.Properties["dNSHostName"].Value as string;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Verbose(opt, "PDC lookup failed: {0}", ex.Message);
+                return null;
+            }
         }
     }
 }
