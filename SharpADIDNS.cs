@@ -863,6 +863,12 @@ namespace SharpADIDNS
                             return ExitCodes.UsageError;
                         }
 
+                        if (opt.DryRun)
+                        {
+                            PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, node);
+                            return ExitCodes.Success;
+                        }
+
                         // B1 fix: preserve other record types on the same node
                         ReplaceSameTypeRecord(node, record, recordType);
                         SetTombstoneFalse(node);
@@ -886,6 +892,12 @@ namespace SharpADIDNS
 
                 if (!nodeExists)
                 {
+                    if (opt.DryRun)
+                    {
+                        PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, null);
+                        return ExitCodes.Success;
+                    }
+
                     using (DirectoryEntry newNode = zone.Children.Add(nodeRdn, "dnsNode"))
                     {
                         newNode.Properties["dnsRecord"].Add(record);
@@ -940,6 +952,12 @@ namespace SharpADIDNS
                     }
                     ErrorReporter.PrintCom(err);
                     return ErrorReporter.ToExitCode(err);
+                }
+
+                if (opt.DryRun)
+                {
+                    PrintDisablePlan(opt, nodeDn, node);
+                    return ExitCodes.Success;
                 }
 
                 byte[] tomb = DnsRecord.BuildTombstone();
@@ -999,6 +1017,12 @@ namespace SharpADIDNS
                         return ErrorReporter.ToExitCode(err);
                     }
 
+                    if (opt.DryRun)
+                    {
+                        PrintRemovePlan(opt, nodeDn, node);
+                        return ExitCodes.Success;
+                    }
+
                     parent.Children.Remove(node);
                     parent.CommitChanges();
 
@@ -1044,6 +1068,64 @@ namespace SharpADIDNS
             if (!r.Properties.Contains(name) || r.Properties[name].Count == 0) return "";
             return r.Properties[name][0].ToString();
         }
+
+        // -------- dry-run plan printers --------
+        private static void PrintAddPlan(Options opt, string nodeDn, byte[] newRecord,
+                                         ushort recordType, string dataDesc,
+                                         DirectoryEntry existingNode)
+        {
+            bool nodeExists = existingNode != null;
+            string mode = nodeExists
+                ? "replace same-type " + DnsRecord.TypeName(recordType) + " on existing node"
+                : "create new dnsNode";
+            Console.WriteLine("[dry-run] add ({0}):", mode);
+            Console.WriteLine("[dry-run]   DN:        {0}", nodeDn);
+            Console.WriteLine("[dry-run]   {0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
+            Console.WriteLine("[dry-run]   New:       {0,-6} {1}",
+                DnsRecord.TypeName(recordType), DnsRecord.SummaryLine(newRecord));
+            Console.WriteLine("[dry-run]   Blob:      {0} ({1} bytes)",
+                BitConverter.ToString(newRecord).Replace("-", ""), newRecord.Length);
+            if (nodeExists)
+            {
+                int existingCount = existingNode.Properties.Contains("dnsRecord")
+                    ? existingNode.Properties["dnsRecord"].Count : 0;
+                Console.WriteLine("[dry-run]   Existing:  {0} record(s) on node (other types preserved)",
+                    existingCount);
+                if (IsTombstoned(existingNode))
+                    Console.WriteLine("[dry-run]   Note:      node is currently TOMBSTONED; --force would un-tombstone");
+            }
+            Console.WriteLine("[dry-run] No AD write performed.");
+        }
+
+        private static void PrintDisablePlan(Options opt, string nodeDn, DirectoryEntry node)
+        {
+            int existing = node.Properties.Contains("dnsRecord") ? node.Properties["dnsRecord"].Count : 0;
+            Console.WriteLine("[dry-run] disable (tombstone):");
+            Console.WriteLine("[dry-run]   DN:                {0}", nodeDn);
+            Console.WriteLine("[dry-run]   Drop:              {0} record(s)", existing);
+            Console.WriteLine("[dry-run]   dNSTombstoned ->   True");
+            byte[] tomb = DnsRecord.BuildTombstone();
+            Console.WriteLine("[dry-run]   Tombstone blob:    {0} ({1} bytes)",
+                BitConverter.ToString(tomb).Replace("-", ""), tomb.Length);
+            Console.WriteLine("[dry-run] No AD write performed.");
+        }
+
+        private static void PrintRemovePlan(Options opt, string nodeDn, DirectoryEntry node)
+        {
+            int existing = node.Properties.Contains("dnsRecord") ? node.Properties["dnsRecord"].Count : 0;
+            Console.WriteLine("[dry-run] remove (hard delete):");
+            Console.WriteLine("[dry-run]   DN:           {0}", nodeDn);
+            Console.WriteLine("[dry-run]   Records lost: {0}", existing);
+            Console.WriteLine("[dry-run] No AD write performed.");
+        }
+
+        private static bool IsTombstoned(DirectoryEntry node)
+        {
+            if (!node.Properties.Contains("dNSTombstoned")) return false;
+            if (node.Properties["dNSTombstoned"].Value == null) return false;
+            bool v;
+            return bool.TryParse(node.Properties["dNSTombstoned"].Value.ToString(), out v) && v;
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1081,6 +1163,9 @@ namespace SharpADIDNS
         // Output
         public bool Verbose;
         public bool Quiet;
+
+        // Safety
+        public bool DryRun;
 
         private static readonly HashSet<string> KnownActions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -1139,6 +1224,7 @@ namespace SharpADIDNS
                 else if (a == "--force")                            o.Force    = true;
                 else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
                 else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
+                else if (a == "--dry-run")                          o.DryRun   = true;
                 else
                     Logger.Warn("Ignored unknown argument: {0}", a);
             }
@@ -1156,6 +1242,7 @@ namespace SharpADIDNS
             PrintTargeting();
             PrintRecordData();
             PrintAuth();
+            PrintSafety();
             PrintOutput();
             PrintExitCodes();
             PrintExamples();
@@ -1229,6 +1316,13 @@ namespace SharpADIDNS
             Console.WriteLine();
             Console.WriteLine("  When --username is given without any password source, the password is");
             Console.WriteLine("  prompted interactively (input not echoed). Fails if stdin is redirected.");
+            Console.WriteLine();
+        }
+
+        private static void PrintSafety()
+        {
+            Console.WriteLine("SAFETY");
+            Console.WriteLine("  --dry-run              Show what would change; do not write to AD");
             Console.WriteLine();
         }
 

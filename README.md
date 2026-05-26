@@ -71,6 +71,12 @@ SharpADIDNS.exe <action> [options]
 
 When `--username` is given without any password source, the password is prompted interactively (input not echoed). If stdin is redirected (CI, piped scripts), the run errors out with usage code 1 instead of silently waiting.
 
+### Safety
+
+| Option | Description |
+| ------ | ----------- |
+| `--dry-run` | For `add` / `disable` / `remove`: bind to AD (read-only), print the intended DN, new blob, and the existing-record delta. **No writes** are performed. Useful for verification before committing changes. |
+
 ### Output
 
 | Option | Description |
