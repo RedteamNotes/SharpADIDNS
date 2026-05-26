@@ -108,10 +108,11 @@ Restore from a backup file: pipe a relevant base64 blob into `add --raw <base64>
 
 | Option | Description |
 | ------ | ----------- |
-| `-v`, `--verbose` | Print DNs, raw blobs, bind details |
-| `-q`, `--quiet`   | Suppress `[*]` info lines |
-| `-h`, `--help`    | Show full help |
-| `-V`, `--version` | Print version and exit |
+| `-v`, `--verbose`        | Print DNs, raw blobs, bind details |
+| `-q`, `--quiet`          | Suppress `[*]` info lines |
+| `--format <text\|json>`  | Output format for `enum` / `query` / `list-zones` (default: `text`). JSON is single-line, suitable for piping through `jq`. |
+| `-h`, `--help`           | Show full help |
+| `-V`, `--version`        | Print version and exit |
 
 ### Exit codes
 

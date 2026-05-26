@@ -765,8 +765,20 @@ namespace SharpADIDNS
         // ------------- list-zones -------------
         public static int RunListZones(Options opt)
         {
+            if (opt.Format != "text" && opt.Format != "json")
+                throw new ArgumentException("--format must be 'text' or 'json'");
+            bool jsonMode = opt.Format == "json";
+
             string[] partitions = { "DomainDnsZones", "ForestDnsZones", "System" };
             int total = 0;
+
+            StringBuilder json = null;
+            bool firstZone = true;
+            if (jsonMode)
+            {
+                json = new StringBuilder();
+                json.Append("{\"zones\":[");
+            }
 
             foreach (string partition in partitions)
             {
@@ -801,34 +813,63 @@ namespace SharpADIDNS
                             foreach (SearchResult r in results)
                             {
                                 string name = Prop(r, "name");
-                                Console.WriteLine("[+] {0,-44} partition={1}", name, partition);
-                                if (opt.Verbose)
-                                {
-                                    Console.WriteLine("    DN:          {0}", Prop(r, "distinguishedName"));
-                                    string when = Prop(r, "whenCreated");
-                                    if (when.Length > 0)
-                                        Console.WriteLine("    whenCreated: {0}", when);
-                                }
+                                string dn   = Prop(r, "distinguishedName");
+                                string when = Prop(r, "whenCreated");
                                 total++;
+
+                                if (jsonMode)
+                                {
+                                    if (!firstZone) json.Append(",");
+                                    firstZone = false;
+                                    json.Append("{");
+                                    json.AppendFormat("\"name\":\"{0}\",", Json.Escape(name));
+                                    json.AppendFormat("\"partition\":\"{0}\",", partition);
+                                    json.AppendFormat("\"dn\":\"{0}\",", Json.Escape(dn));
+                                    json.AppendFormat("\"whenCreated\":\"{0}\"", Json.Escape(when));
+                                    json.Append("}");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("[+] {0,-44} partition={1}", name, partition);
+                                    if (opt.Verbose)
+                                    {
+                                        Console.WriteLine("    DN:          {0}", dn);
+                                        if (when.Length > 0)
+                                            Console.WriteLine("    whenCreated: {0}", when);
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            Console.WriteLine();
-            Logger.Ok("Total zones: {0}", total);
+            if (jsonMode)
+            {
+                json.Append("],");
+                json.AppendFormat("\"total\":{0}", total);
+                json.Append("}");
+                Console.WriteLine(json.ToString());
+            }
+            else
+            {
+                Console.WriteLine();
+                Logger.Ok("Total zones: {0}", total);
+            }
             return ExitCodes.Success;
         }
 
         // ------------- enum -------------
         public static int RunEnum(Options opt, string zoneDn)
         {
+            if (opt.Format != "text" && opt.Format != "json")
+                throw new ArgumentException("--format must be 'text' or 'json'");
             if (opt.OnlyTombstoned && opt.NoTombstoned)
                 throw new ArgumentException("--only-tombstoned and --no-tombstoned are mutually exclusive");
 
             HashSet<ushort> typeSet = ParseTypeFilter(opt.FilterType);
             Regex nameRegex = string.IsNullOrEmpty(opt.FilterName) ? null : GlobToRegex(opt.FilterName);
+            bool jsonMode = opt.Format == "json";
 
             using (DirectoryEntry zone = LdapOps.Open(opt, zoneDn))
             {
@@ -842,12 +883,15 @@ namespace SharpADIDNS
                     return ErrorReporter.ToExitCode(err);
                 }
 
-                Logger.Info(opt, "Enumerating dnsNode objects under: {0}", zoneDn);
-                if (typeSet != null || nameRegex != null || opt.OnlyTombstoned || opt.NoTombstoned)
-                    Logger.Info(opt, "Filters: type={0}  name={1}  tomb={2}",
-                        typeSet != null ? opt.FilterType : "*",
-                        nameRegex != null ? opt.FilterName : "*",
-                        opt.OnlyTombstoned ? "only" : (opt.NoTombstoned ? "exclude" : "any"));
+                if (!jsonMode)
+                {
+                    Logger.Info(opt, "Enumerating dnsNode objects under: {0}", zoneDn);
+                    if (typeSet != null || nameRegex != null || opt.OnlyTombstoned || opt.NoTombstoned)
+                        Logger.Info(opt, "Filters: type={0}  name={1}  tomb={2}",
+                            typeSet != null ? opt.FilterType : "*",
+                            nameRegex != null ? opt.FilterName : "*",
+                            opt.OnlyTombstoned ? "only" : (opt.NoTombstoned ? "exclude" : "any"));
+                }
 
                 using (DirectorySearcher searcher = new DirectorySearcher(zone))
                 {
@@ -860,6 +904,15 @@ namespace SharpADIDNS
                     searcher.PropertiesToLoad.Add("dNSTombstoned");
 
                     int fetched = 0, shown = 0, active = 0, tombstoned = 0;
+                    StringBuilder json = null;
+                    bool firstNode = true;
+                    if (jsonMode)
+                    {
+                        json = new StringBuilder();
+                        json.Append("{\"zone_dn\":\"").Append(Json.Escape(zoneDn)).Append("\",");
+                        json.Append("\"nodes\":[");
+                    }
+
                     using (SearchResultCollection results = searcher.FindAll())
                     {
                         foreach (SearchResult r in results)
@@ -877,33 +930,70 @@ namespace SharpADIDNS
                             shown++;
                             if (isTomb) tombstoned++; else active++;
 
-                            Console.WriteLine();
-                            Console.WriteLine("[+] {0}{1}", name, isTomb ? "  [TOMBSTONED]" : "");
-                            if (opt.Verbose)
-                                Console.WriteLine("    DN: {0}", Prop(r, "distinguishedName"));
-
-                            if (!r.Properties.Contains("dnsRecord") || r.Properties["dnsRecord"].Count == 0)
+                            if (jsonMode)
                             {
-                                Console.WriteLine("    <no records>");
-                                continue;
+                                if (!firstNode) json.Append(",");
+                                firstNode = false;
+                                json.Append("{");
+                                json.AppendFormat("\"name\":\"{0}\",", Json.Escape(name));
+                                json.AppendFormat("\"dn\":\"{0}\",", Json.Escape(Prop(r, "distinguishedName")));
+                                json.AppendFormat("\"tombstoned\":{0},", isTomb ? "true" : "false");
+                                json.Append("\"records\":[");
+                                bool firstRec = true;
+                                if (r.Properties.Contains("dnsRecord"))
+                                {
+                                    foreach (object o in r.Properties["dnsRecord"])
+                                    {
+                                        byte[] data = o as byte[];
+                                        if (data == null) continue;
+                                        if (!firstRec) json.Append(",");
+                                        firstRec = false;
+                                        WriteRecordJson(json, data);
+                                    }
+                                }
+                                json.Append("]}");
                             }
-
-                            foreach (object o in r.Properties["dnsRecord"])
+                            else
                             {
-                                byte[] data = o as byte[];
-                                if (data == null) continue;
-                                ushort t = DnsRecord.GetType(data);
-                                Console.WriteLine("    {0,-6} {1}", DnsRecord.TypeName(t), DnsRecord.SummaryLine(data));
+                                Console.WriteLine();
+                                Console.WriteLine("[+] {0}{1}", name, isTomb ? "  [TOMBSTONED]" : "");
+                                if (opt.Verbose)
+                                    Console.WriteLine("    DN: {0}", Prop(r, "distinguishedName"));
+
+                                if (!r.Properties.Contains("dnsRecord") || r.Properties["dnsRecord"].Count == 0)
+                                {
+                                    Console.WriteLine("    <no records>");
+                                    continue;
+                                }
+
+                                foreach (object o in r.Properties["dnsRecord"])
+                                {
+                                    byte[] data = o as byte[];
+                                    if (data == null) continue;
+                                    ushort t = DnsRecord.GetType(data);
+                                    Console.WriteLine("    {0,-6} {1}", DnsRecord.TypeName(t), DnsRecord.SummaryLine(data));
+                                }
                             }
                         }
                     }
 
-                    Console.WriteLine();
-                    if (fetched != shown)
-                        Logger.Ok("Shown: {0} nodes ({1} active, {2} tombstoned); {3} filtered out of {4} fetched",
-                            shown, active, tombstoned, fetched - shown, fetched);
+                    if (jsonMode)
+                    {
+                        json.Append("],");
+                        json.AppendFormat("\"summary\":{{\"fetched\":{0},\"shown\":{1},\"active\":{2},\"tombstoned\":{3}}}",
+                            fetched, shown, active, tombstoned);
+                        json.Append("}");
+                        Console.WriteLine(json.ToString());
+                    }
                     else
-                        Logger.Ok("Total: {0} nodes ({1} active, {2} tombstoned)", shown, active, tombstoned);
+                    {
+                        Console.WriteLine();
+                        if (fetched != shown)
+                            Logger.Ok("Shown: {0} nodes ({1} active, {2} tombstoned); {3} filtered out of {4} fetched",
+                                shown, active, tombstoned, fetched - shown, fetched);
+                        else
+                            Logger.Ok("Total: {0} nodes ({1} active, {2} tombstoned)", shown, active, tombstoned);
+                    }
                 }
             }
             return ExitCodes.Success;
@@ -912,8 +1002,12 @@ namespace SharpADIDNS
         // ------------- query -------------
         public static int RunQuery(Options opt, string zoneDn)
         {
+            if (opt.Format != "text" && opt.Format != "json")
+                throw new ArgumentException("--format must be 'text' or 'json'");
+
             string nodeDn = "DC=" + LdapOps.EscapeRdn(opt.Name) + "," + zoneDn;
             Logger.Verbose(opt, "Node DN:    {0}", nodeDn);
+            bool jsonMode = opt.Format == "json";
 
             using (DirectoryEntry node = LdapOps.Open(opt, nodeDn))
             {
@@ -929,6 +1023,12 @@ namespace SharpADIDNS
                     return ErrorReporter.ToExitCode(err);
                 }
 
+                if (jsonMode)
+                {
+                    WriteQueryJson(opt, node, nodeDn);
+                    return ExitCodes.Success;
+                }
+
                 Logger.Ok("Found node");
                 Logger.Ok("DN: {0}", nodeDn);
 
@@ -941,6 +1041,7 @@ namespace SharpADIDNS
                 if (!node.Properties.Contains("dnsRecord") || node.Properties["dnsRecord"].Count == 0)
                 {
                     Logger.Info(opt, "dnsRecord: <empty>");
+                    PrintNodePermissions(opt, node);
                     return ExitCodes.Success;
                 }
 
@@ -959,6 +1060,94 @@ namespace SharpADIDNS
                 PrintNodePermissions(opt, node);
             }
             return ExitCodes.Success;
+        }
+
+        private static void WriteQueryJson(Options opt, DirectoryEntry node, string nodeDn)
+        {
+            StringBuilder json = new StringBuilder();
+            json.Append("{");
+            json.AppendFormat("\"dn\":\"{0}\",", Json.Escape(nodeDn));
+            json.AppendFormat("\"name\":\"{0}\",", Json.Escape(PropOne(node, "name")));
+            json.AppendFormat("\"dNSTombstoned\":{0},", IsTombstoned(node) ? "true" : "false");
+            json.AppendFormat("\"whenCreated\":\"{0}\",", Json.Escape(PropOne(node, "whenCreated")));
+            json.AppendFormat("\"whenChanged\":\"{0}\",", Json.Escape(PropOne(node, "whenChanged")));
+
+            json.Append("\"records\":[");
+            bool firstRec = true;
+            if (node.Properties.Contains("dnsRecord"))
+            {
+                foreach (object o in node.Properties["dnsRecord"])
+                {
+                    byte[] data = o as byte[];
+                    if (data == null) continue;
+                    if (!firstRec) json.Append(",");
+                    firstRec = false;
+                    WriteRecordJson(json, data);
+                }
+            }
+            json.Append("],");
+
+            // Permissions
+            json.Append("\"permissions\":");
+            WritePermissionsJson(json, node);
+
+            json.Append("}");
+            Console.WriteLine(json.ToString());
+        }
+
+        private static void WritePermissionsJson(StringBuilder json, DirectoryEntry node)
+        {
+            ActiveDirectorySecurity sec;
+            try { sec = node.ObjectSecurity; }
+            catch { json.Append("null"); return; }
+            if (sec == null) { json.Append("null"); return; }
+
+            json.Append("{");
+
+            string owner = null;
+            try
+            {
+                IdentityReference o = sec.GetOwner(typeof(NTAccount));
+                if (o != null) owner = o.Value;
+            }
+            catch { /* ignored */ }
+            json.AppendFormat("\"owner\":{0},",
+                owner == null ? "null" : "\"" + Json.Escape(owner) + "\"");
+
+            AuthorizationRuleCollection rules;
+            try { rules = sec.GetAccessRules(true, true, typeof(NTAccount)); }
+            catch { json.Append("\"aces\":[]}"); return; }
+
+            int explicitCount = 0, inheritedCount = 0;
+            json.Append("\"aces\":[");
+            bool first = true;
+            foreach (AuthorizationRule rule in rules)
+            {
+                ActiveDirectoryAccessRule ar = rule as ActiveDirectoryAccessRule;
+                if (ar == null) continue;
+                if (ar.IsInherited) inheritedCount++;
+                else                explicitCount++;
+                if (!first) json.Append(",");
+                first = false;
+                string id = ar.IdentityReference != null ? ar.IdentityReference.Value : null;
+                json.Append("{");
+                json.AppendFormat("\"type\":\"{0}\",", ar.AccessControlType);
+                json.AppendFormat("\"trustee\":{0},",
+                    id == null ? "null" : "\"" + Json.Escape(id) + "\"");
+                json.AppendFormat("\"rights\":\"{0}\",", Json.Escape(ar.ActiveDirectoryRights.ToString()));
+                json.AppendFormat("\"inherited\":{0}", ar.IsInherited ? "true" : "false");
+                json.Append("}");
+            }
+            json.Append("],");
+            json.AppendFormat("\"explicit_count\":{0},\"inherited_count\":{1}",
+                explicitCount, inheritedCount);
+            json.Append("}");
+        }
+
+        private static string PropOne(DirectoryEntry e, string name)
+        {
+            if (!e.Properties.Contains(name) || e.Properties[name].Count == 0) return "";
+            return e.Properties[name][0].ToString();
         }
 
         // ------------- add -------------
@@ -1424,6 +1613,71 @@ namespace SharpADIDNS
             return false;
         }
 
+        // -------- json output helpers --------
+        internal static void WriteRecordJson(StringBuilder sb, byte[] data)
+        {
+            if (data == null || data.Length < 24)
+            {
+                sb.Append("{\"error\":\"record too short\"}");
+                return;
+            }
+            ushort type   = DnsRecord.GetType(data);
+            ushort dataLen = Bin.ReadU16Le(data, 0);
+            uint   ttl    = Bin.ReadU32Be(data, 12);
+
+            sb.Append("{");
+            sb.AppendFormat("\"type\":\"{0}\",", DnsRecord.TypeName(type));
+            sb.AppendFormat("\"type_id\":{0},", type);
+            sb.AppendFormat("\"ttl\":{0},", ttl);
+
+            switch (type)
+            {
+                case DnsRecord.TypeA:
+                    if (data.Length >= 28)
+                        sb.AppendFormat("\"ipv4\":\"{0}.{1}.{2}.{3}\",",
+                            data[24], data[25], data[26], data[27]);
+                    break;
+                case DnsRecord.TypeAaaa:
+                    if (data.Length >= 40)
+                    {
+                        byte[] addr = new byte[16];
+                        Buffer.BlockCopy(data, 24, addr, 0, 16);
+                        sb.AppendFormat("\"ipv6\":\"{0}\",", new IPAddress(addr));
+                    }
+                    break;
+                case DnsRecord.TypeCname:
+                case DnsRecord.TypePtr:
+                case DnsRecord.TypeNs:
+                    sb.AppendFormat("\"target\":\"{0}\",", Json.Escape(DnsRecord.DecodeCountName(data, 24)));
+                    break;
+                case DnsRecord.TypeTxt:
+                    sb.AppendFormat("\"text\":\"{0}\",", Json.Escape(DnsRecord.DecodeTxt(data, 24, dataLen)));
+                    break;
+                case DnsRecord.TypeSrv:
+                    if (data.Length >= 30)
+                    {
+                        sb.AppendFormat("\"priority\":{0},", Bin.ReadU16Be(data, 24));
+                        sb.AppendFormat("\"weight\":{0},",   Bin.ReadU16Be(data, 26));
+                        sb.AppendFormat("\"port\":{0},",     Bin.ReadU16Be(data, 28));
+                        sb.AppendFormat("\"target\":\"{0}\",", Json.Escape(DnsRecord.DecodeCountName(data, 30)));
+                    }
+                    break;
+                case DnsRecord.TypeMx:
+                    if (data.Length >= 26)
+                    {
+                        sb.AppendFormat("\"preference\":{0},", Bin.ReadU16Be(data, 24));
+                        sb.AppendFormat("\"exchange\":\"{0}\",", Json.Escape(DnsRecord.DecodeCountName(data, 26)));
+                    }
+                    break;
+                case DnsRecord.TypeZero:
+                    sb.Append("\"tombstone\":true,");
+                    break;
+            }
+
+            sb.AppendFormat("\"blob_base64\":\"{0}\"", Convert.ToBase64String(data));
+            sb.Append("}");
+        }
+
         // -------- query permissions printer --------
         private static void PrintNodePermissions(Options opt, DirectoryEntry node)
         {
@@ -1547,6 +1801,7 @@ namespace SharpADIDNS
         // Output
         public bool Verbose;
         public bool Quiet;
+        public string Format = "text";
 
         // Safety
         public bool   DryRun;
@@ -1620,6 +1875,7 @@ namespace SharpADIDNS
                 else if (a == "--force")                            o.Force    = true;
                 else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
                 else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
+                else if (a == "--format" && i + 1 < args.Length)    o.Format   = args[++i].ToLowerInvariant();
                 else if (a == "--dry-run")                          o.DryRun   = true;
                 else if (a == "--backup-to" && i + 1 < args.Length) o.BackupTo = args[++i];
                 else if (a == "-y" || a == "--yes")                 o.Yes      = true;
@@ -1773,6 +2029,9 @@ namespace SharpADIDNS
             Console.WriteLine("OUTPUT");
             Console.WriteLine("  -v, --verbose          Print DNs, raw blobs, bind details");
             Console.WriteLine("  -q, --quiet            Suppress [*] info lines");
+            Console.WriteLine("  --format <text|json>   Output format for enum / query / list-zones");
+            Console.WriteLine("                         (default: text). JSON is single-line, suitable");
+            Console.WriteLine("                         for piping through 'jq'.");
             Console.WriteLine("  -h, --help             Show this help");
             Console.WriteLine("  -V, --version          Print version and exit");
             Console.WriteLine();
