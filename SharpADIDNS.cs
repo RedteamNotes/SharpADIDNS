@@ -56,11 +56,13 @@ namespace SharpADIDNS
 
                 if (string.IsNullOrWhiteSpace(opt.Action))
                 {
-                    Logger.Err("No action specified (expected: enum | query | add | disable | remove)");
+                    Logger.Err("No action specified (expected: enum | query | add | disable | remove | list-zones)");
                     return ExitCodes.UsageError;
                 }
 
-                if (string.IsNullOrWhiteSpace(opt.Zone))
+                bool needsZone = opt.Action != "list-zones";
+
+                if (needsZone && string.IsNullOrWhiteSpace(opt.Zone))
                 {
                     Logger.Err("--zone is required");
                     return ExitCodes.UsageError;
@@ -74,10 +76,11 @@ namespace SharpADIDNS
 
                 Credentials.Resolve(opt);
 
-                string zoneDn = LdapOps.BuildZoneDn(opt.Zone, opt.Partition, opt.DomainDn);
+                string zoneDn = needsZone ? LdapOps.BuildZoneDn(opt.Zone, opt.Partition, opt.DomainDn) : null;
 
                 Logger.Verbose(opt, "Action:     {0}", opt.Action);
-                Logger.Verbose(opt, "Zone DN:    {0}", zoneDn);
+                if (zoneDn != null)
+                    Logger.Verbose(opt, "Zone DN:    {0}", zoneDn);
                 if (!string.IsNullOrWhiteSpace(opt.Server))
                     Logger.Verbose(opt, "LDAP DC:    {0}", opt.Server);
                 if (!string.IsNullOrWhiteSpace(opt.Username))
@@ -92,6 +95,9 @@ namespace SharpADIDNS
                     case "query":
                         if (RequireName(opt) != 0) return ExitCodes.UsageError;
                         return Actions.RunQuery(opt, zoneDn);
+
+                    case "list-zones":
+                        return Actions.RunListZones(opt);
 
                     case "add":
                         if (RequireName(opt) != 0) return ExitCodes.UsageError;
@@ -196,6 +202,19 @@ namespace SharpADIDNS
                 return "DC=" + EscapeRdn(zone) + ",CN=MicrosoftDNS,DC=ForestDnsZones," + domainDn;
             if (partition.Equals("System", StringComparison.OrdinalIgnoreCase))
                 return "DC=" + EscapeRdn(zone) + ",CN=MicrosoftDNS,CN=System," + domainDn;
+            throw new ArgumentException(
+                "Unsupported --partition: " + partition +
+                " (expected DomainDnsZones, ForestDnsZones, or System)");
+        }
+
+        public static string BuildContainerDn(string partition, string domainDn)
+        {
+            if (partition.Equals("DomainDnsZones", StringComparison.OrdinalIgnoreCase))
+                return "CN=MicrosoftDNS,DC=DomainDnsZones," + domainDn;
+            if (partition.Equals("ForestDnsZones", StringComparison.OrdinalIgnoreCase))
+                return "CN=MicrosoftDNS,DC=ForestDnsZones," + domainDn;
+            if (partition.Equals("System", StringComparison.OrdinalIgnoreCase))
+                return "CN=MicrosoftDNS,CN=System," + domainDn;
             throw new ArgumentException(
                 "Unsupported --partition: " + partition +
                 " (expected DomainDnsZones, ForestDnsZones, or System)");
@@ -743,6 +762,65 @@ namespace SharpADIDNS
     // -----------------------------------------------------------------------
     internal static class Actions
     {
+        // ------------- list-zones -------------
+        public static int RunListZones(Options opt)
+        {
+            string[] partitions = { "DomainDnsZones", "ForestDnsZones", "System" };
+            int total = 0;
+
+            foreach (string partition in partitions)
+            {
+                string containerDn = LdapOps.BuildContainerDn(partition, opt.DomainDn);
+                Logger.Verbose(opt, "Searching: {0}", containerDn);
+
+                using (DirectoryEntry container = LdapOps.Open(opt, containerDn))
+                {
+                    DirectoryServicesCOMException err;
+                    if (!LdapOps.TryBind(container, out err))
+                    {
+                        if (ErrorReporter.IsNotFound(err))
+                        {
+                            Logger.Verbose(opt, "Partition not present at this DN: {0}", partition);
+                            continue;
+                        }
+                        Logger.Warn("Could not search partition {0}: {1}", partition, err.Message);
+                        continue;
+                    }
+
+                    using (DirectorySearcher searcher = new DirectorySearcher(container))
+                    {
+                        searcher.Filter = "(objectClass=dnsZone)";
+                        searcher.SearchScope = SearchScope.OneLevel;
+                        searcher.PageSize = 1000;
+                        searcher.PropertiesToLoad.Add("name");
+                        searcher.PropertiesToLoad.Add("distinguishedName");
+                        searcher.PropertiesToLoad.Add("whenCreated");
+
+                        using (SearchResultCollection results = searcher.FindAll())
+                        {
+                            foreach (SearchResult r in results)
+                            {
+                                string name = Prop(r, "name");
+                                Console.WriteLine("[+] {0,-44} partition={1}", name, partition);
+                                if (opt.Verbose)
+                                {
+                                    Console.WriteLine("    DN:          {0}", Prop(r, "distinguishedName"));
+                                    string when = Prop(r, "whenCreated");
+                                    if (when.Length > 0)
+                                        Console.WriteLine("    whenCreated: {0}", when);
+                                }
+                                total++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Console.WriteLine();
+            Logger.Ok("Total zones: {0}", total);
+            return ExitCodes.Success;
+        }
+
         // ------------- enum -------------
         public static int RunEnum(Options opt, string zoneDn)
         {
@@ -1483,7 +1561,7 @@ namespace SharpADIDNS
 
         private static readonly HashSet<string> KnownActions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { "enum", "query", "add", "disable", "remove" };
+            { "enum", "query", "add", "disable", "remove", "list-zones" };
 
         public static Options Parse(string[] args)
         {
@@ -1603,9 +1681,10 @@ namespace SharpADIDNS
             Console.WriteLine("ACTIONS");
             Console.WriteLine("  enum                   List dnsNode objects under a zone");
             Console.WriteLine("  query                  Read one dnsNode and decode its dnsRecord blob(s)");
-            Console.WriteLine("  add                    Create or update a record (A/AAAA/CNAME/TXT or raw)");
+            Console.WriteLine("  add                    Create or update a record (A/AAAA/CNAME/TXT/PTR/SRV/MX or raw)");
             Console.WriteLine("  disable                Tombstone a node (soft delete, object preserved)");
             Console.WriteLine("  remove                 Hard-delete the dnsNode object");
+            Console.WriteLine("  list-zones             Enumerate dnsZone objects across all 3 partitions");
             Console.WriteLine();
         }
 

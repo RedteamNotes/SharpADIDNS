@@ -10,9 +10,10 @@ Built around `System.DirectoryServices`. Targets .NET Framework 4.x and produces
 | ------- | ----------- |
 | enum    | List every `dnsNode` under a zone, with type and value summary |
 | query   | Read one node and decode each `dnsRecord` blob in detail, plus an owner + DACL summary |
-| add     | Create or update a record (A, AAAA, CNAME, TXT, or raw blob) |
+| add     | Create or update a record (A, AAAA, CNAME, TXT, PTR, SRV, MX, or raw blob) |
 | disable | Tombstone the node (soft delete; object stays in AD) |
 | remove  | Hard-delete the `dnsNode` object |
+| list-zones | Enumerate `dnsZone` objects across all three partitions (DomainDnsZones / ForestDnsZones / System) |
 
 Record builders implement the `DNS_RPC_RECORD` structure from [MS-DNSP] and the `DNS_COUNT_NAME` label encoding used for CNAME / PTR / NS.
 
@@ -129,6 +130,14 @@ Enumerate every node in a zone:
 ```bash
 SharpADIDNS.exe enum \
     --zone redteamnotes.local \
+    --dn DC=redteamnotes,DC=local \
+    --server dc.redteamnotes.local
+```
+
+Enumerate all DNS zones across every partition (no `--zone` needed):
+
+```bash
+SharpADIDNS.exe list-zones \
     --dn DC=redteamnotes,DC=local \
     --server dc.redteamnotes.local
 ```
