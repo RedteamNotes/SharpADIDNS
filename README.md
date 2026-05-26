@@ -77,8 +77,16 @@ When `--username` is given without any password source, the password is prompted
 | ------ | ----------- |
 | `--dry-run`          | For `add` / `disable` / `remove`: bind to AD (read-only), print the intended DN, new blob, and the existing-record delta. **No writes** are performed. Useful for verification before committing changes. |
 | `--backup-to <file>` | Before modifying a node (`add --force`, `disable`, `remove`), append a JSON line capturing the existing state to `<file>`. One file accumulates entries across runs. Fields: `timestamp` (UTC ISO 8601), `action`, `dn`, `dNSTombstoned`, `records` (array of base64-encoded `dnsRecord` blobs). |
+| `-y`, `--yes`        | Skip the interactive confirmation on high-risk operations (see list below). Required when stdin is not a TTY (CI, piped scripts) -- otherwise high-risk ops refuse to run. |
 
-To restore a record from a backup file, pipe the relevant base64 blob into `add --raw <base64> --force`. Each line in the backup file is independent and self-describing.
+Restore from a backup file: pipe a relevant base64 blob into `add --raw <base64> --force`. Each line is independent and self-describing.
+
+**High-risk triggers** that prompt for confirmation (or require `--yes`):
+
+- any `remove` -- hard-deletes the `dnsNode` object
+- `add --name "*"` -- wildcard hijacks every unresolved name in the zone
+- `add --name wpad` / `add --name isatap` -- GQBL-monitored names, heavily flagged by MDI / SIEM
+- `add --force` on a node with `dNSTombstoned=TRUE` -- un-tombstone is a known ADIDNS-abuse IOC
 
 ### Output
 

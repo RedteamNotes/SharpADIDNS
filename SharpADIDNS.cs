@@ -869,6 +869,9 @@ namespace SharpADIDNS
                             return ExitCodes.Success;
                         }
 
+                        if (!Safety.ConfirmIfHighRisk(opt, node))
+                            return ExitCodes.UsageError;
+
                         Backup.Snapshot(opt, nodeDn, "add(force-replace)", node);
 
                         // B1 fix: preserve other record types on the same node
@@ -899,6 +902,9 @@ namespace SharpADIDNS
                         PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, null);
                         return ExitCodes.Success;
                     }
+
+                    if (!Safety.ConfirmIfHighRisk(opt, null))
+                        return ExitCodes.UsageError;
 
                     using (DirectoryEntry newNode = zone.Children.Add(nodeRdn, "dnsNode"))
                     {
@@ -1026,6 +1032,9 @@ namespace SharpADIDNS
                         PrintRemovePlan(opt, nodeDn, node);
                         return ExitCodes.Success;
                     }
+
+                    if (!Safety.ConfirmIfHighRisk(opt, node))
+                        return ExitCodes.UsageError;
 
                     Backup.Snapshot(opt, nodeDn, "remove", node);
 
@@ -1173,6 +1182,7 @@ namespace SharpADIDNS
         // Safety
         public bool   DryRun;
         public string BackupTo;
+        public bool   Yes;
 
         private static readonly HashSet<string> KnownActions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -1233,6 +1243,7 @@ namespace SharpADIDNS
                 else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
                 else if (a == "--dry-run")                          o.DryRun   = true;
                 else if (a == "--backup-to" && i + 1 < args.Length) o.BackupTo = args[++i];
+                else if (a == "-y" || a == "--yes")                 o.Yes      = true;
                 else
                     Logger.Warn("Ignored unknown argument: {0}", a);
             }
@@ -1336,6 +1347,13 @@ namespace SharpADIDNS
             Console.WriteLine("                         runs. Fields: timestamp, action, dn,");
             Console.WriteLine("                         dNSTombstoned, records (base64-encoded blobs).");
             Console.WriteLine("                         Restore via 'add --raw <base64> --force'.");
+            Console.WriteLine("  -y, --yes              Skip interactive confirmation on high-risk ops:");
+            Console.WriteLine("                           - any 'remove'");
+            Console.WriteLine("                           - 'add --name \"*\"' (wildcard)");
+            Console.WriteLine("                           - 'add --name wpad|isatap' (GQBL-monitored)");
+            Console.WriteLine("                           - 'add --force' on a tombstoned node");
+            Console.WriteLine("                         Without a TTY and without --yes, high-risk ops");
+            Console.WriteLine("                         refuse to run.");
             Console.WriteLine();
         }
 
@@ -1564,6 +1582,66 @@ namespace SharpADIDNS
             }
 
             Logger.Info(opt, "Snapshot appended to: {0} ({1} record(s))", opt.BackupTo, records.Count);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // High-risk operation confirmation
+    // -----------------------------------------------------------------------
+    internal static class Safety
+    {
+        public static bool ConfirmIfHighRisk(Options opt, DirectoryEntry existingNode)
+        {
+            string reason = DetectReason(opt, existingNode);
+            if (reason == null) return true;
+
+            if (opt.Yes)
+            {
+                Logger.Info(opt, "High-risk: {0} (--yes given, proceeding)", reason);
+                return true;
+            }
+
+            if (Console.IsInputRedirected)
+            {
+                Logger.Err("High-risk op refused: stdin not a TTY and --yes not set.");
+                Logger.Err("Reason: {0}", reason);
+                return false;
+            }
+
+            Console.Error.WriteLine("[!] HIGH RISK: {0}", reason);
+            Console.Error.Write("[?] Proceed? [y/N]: ");
+            string line = Console.In.ReadLine();
+            bool ok = line != null &&
+                      (line.Trim().Equals("y",   StringComparison.OrdinalIgnoreCase) ||
+                       line.Trim().Equals("yes", StringComparison.OrdinalIgnoreCase));
+            if (!ok) Logger.Info(opt, "Declined by user.");
+            return ok;
+        }
+
+        private static string DetectReason(Options opt, DirectoryEntry existingNode)
+        {
+            if (opt.Action == "remove")
+                return "remove is a hard-delete of the dnsNode object (visible as an " +
+                       "objectClass=dnsNode delete event in DS-Access auditing).";
+
+            if (opt.Action == "add")
+            {
+                if (opt.Name == "*")
+                    return "wildcard injection hijacks every unresolved name in the zone.";
+
+                if (opt.Name != null &&
+                    (opt.Name.Equals("wpad",   StringComparison.OrdinalIgnoreCase) ||
+                     opt.Name.Equals("isatap", StringComparison.OrdinalIgnoreCase)))
+                    return "'" + opt.Name + "' is on the DNS server's Global Query Block " +
+                           "List and is heavily monitored by Microsoft Defender for Identity " +
+                           "and most SIEM rule packs.";
+
+                if (existingNode != null && Actions.IsTombstoned(existingNode))
+                    return "node is currently TOMBSTONED; --force would un-tombstone it " +
+                           "(dNSTombstoned: TRUE -> FALSE is a known IOC for ADIDNS abuse).";
+            }
+
+            return null;
         }
     }
 }
