@@ -869,6 +869,8 @@ namespace SharpADIDNS
                             return ExitCodes.Success;
                         }
 
+                        Backup.Snapshot(opt, nodeDn, "add(force-replace)", node);
+
                         // B1 fix: preserve other record types on the same node
                         ReplaceSameTypeRecord(node, record, recordType);
                         SetTombstoneFalse(node);
@@ -960,6 +962,8 @@ namespace SharpADIDNS
                     return ExitCodes.Success;
                 }
 
+                Backup.Snapshot(opt, nodeDn, "disable", node);
+
                 byte[] tomb = DnsRecord.BuildTombstone();
                 node.Properties["dnsRecord"].Clear();
                 node.Properties["dnsRecord"].Add(tomb);
@@ -1022,6 +1026,8 @@ namespace SharpADIDNS
                         PrintRemovePlan(opt, nodeDn, node);
                         return ExitCodes.Success;
                     }
+
+                    Backup.Snapshot(opt, nodeDn, "remove", node);
 
                     parent.Children.Remove(node);
                     parent.CommitChanges();
@@ -1119,7 +1125,7 @@ namespace SharpADIDNS
             Console.WriteLine("[dry-run] No AD write performed.");
         }
 
-        private static bool IsTombstoned(DirectoryEntry node)
+        internal static bool IsTombstoned(DirectoryEntry node)
         {
             if (!node.Properties.Contains("dNSTombstoned")) return false;
             if (node.Properties["dNSTombstoned"].Value == null) return false;
@@ -1165,7 +1171,8 @@ namespace SharpADIDNS
         public bool Quiet;
 
         // Safety
-        public bool DryRun;
+        public bool   DryRun;
+        public string BackupTo;
 
         private static readonly HashSet<string> KnownActions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -1225,6 +1232,7 @@ namespace SharpADIDNS
                 else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
                 else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
                 else if (a == "--dry-run")                          o.DryRun   = true;
+                else if (a == "--backup-to" && i + 1 < args.Length) o.BackupTo = args[++i];
                 else
                     Logger.Warn("Ignored unknown argument: {0}", a);
             }
@@ -1323,6 +1331,11 @@ namespace SharpADIDNS
         {
             Console.WriteLine("SAFETY");
             Console.WriteLine("  --dry-run              Show what would change; do not write to AD");
+            Console.WriteLine("  --backup-to <file>     Append a JSON line per affected node before");
+            Console.WriteLine("                         modifying it. One file accumulates entries across");
+            Console.WriteLine("                         runs. Fields: timestamp, action, dn,");
+            Console.WriteLine("                         dNSTombstoned, records (base64-encoded blobs).");
+            Console.WriteLine("                         Restore via 'add --raw <base64> --force'.");
             Console.WriteLine();
         }
 
@@ -1473,6 +1486,84 @@ namespace SharpADIDNS
             }
             Console.Error.WriteLine();
             return sb.ToString();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Minimal JSON helpers (reused by Backup and the --format json output)
+    // -----------------------------------------------------------------------
+    internal static class Json
+    {
+        public static string Escape(string s)
+        {
+            if (s == null) return "";
+            StringBuilder sb = new StringBuilder(s.Length + 2);
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append("\\\\"); break;
+                    case '"':  sb.Append("\\\""); break;
+                    case '\b': sb.Append("\\b");  break;
+                    case '\f': sb.Append("\\f");  break;
+                    case '\n': sb.Append("\\n");  break;
+                    case '\r': sb.Append("\\r");  break;
+                    case '\t': sb.Append("\\t");  break;
+                    default:
+                        if (c < 0x20) sb.AppendFormat("\\u{0:X4}", (int)c);
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // --backup-to JSONL snapshot writer
+    // -----------------------------------------------------------------------
+    internal static class Backup
+    {
+        public static void Snapshot(Options opt, string nodeDn, string action, DirectoryEntry node)
+        {
+            if (string.IsNullOrEmpty(opt.BackupTo)) return;
+
+            bool tomb = node != null && Actions.IsTombstoned(node);
+            List<byte[]> records = new List<byte[]>();
+            if (node != null && node.Properties.Contains("dnsRecord"))
+            {
+                foreach (object o in node.Properties["dnsRecord"])
+                {
+                    byte[] b = o as byte[];
+                    if (b != null) records.Add(b);
+                }
+            }
+
+            StringBuilder json = new StringBuilder();
+            json.Append("{");
+            json.Append("\"timestamp\":\"").Append(DateTime.UtcNow.ToString("o")).Append("\",");
+            json.Append("\"action\":\"").Append(Json.Escape(action)).Append("\",");
+            json.Append("\"dn\":\"").Append(Json.Escape(nodeDn)).Append("\",");
+            json.Append("\"dNSTombstoned\":").Append(tomb ? "true" : "false").Append(",");
+            json.Append("\"records\":[");
+            for (int i = 0; i < records.Count; i++)
+            {
+                if (i > 0) json.Append(",");
+                json.Append("\"").Append(Convert.ToBase64String(records[i])).Append("\"");
+            }
+            json.Append("]}\n");
+
+            try
+            {
+                File.AppendAllText(opt.BackupTo, json.ToString(), Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException(
+                    "Failed to write --backup-to file '" + opt.BackupTo + "': " + ex.Message, ex);
+            }
+
+            Logger.Info(opt, "Snapshot appended to: {0} ({1} record(s))", opt.BackupTo, records.Count);
         }
     }
 }

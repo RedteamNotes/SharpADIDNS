@@ -75,7 +75,10 @@ When `--username` is given without any password source, the password is prompted
 
 | Option | Description |
 | ------ | ----------- |
-| `--dry-run` | For `add` / `disable` / `remove`: bind to AD (read-only), print the intended DN, new blob, and the existing-record delta. **No writes** are performed. Useful for verification before committing changes. |
+| `--dry-run`          | For `add` / `disable` / `remove`: bind to AD (read-only), print the intended DN, new blob, and the existing-record delta. **No writes** are performed. Useful for verification before committing changes. |
+| `--backup-to <file>` | Before modifying a node (`add --force`, `disable`, `remove`), append a JSON line capturing the existing state to `<file>`. One file accumulates entries across runs. Fields: `timestamp` (UTC ISO 8601), `action`, `dn`, `dNSTombstoned`, `records` (array of base64-encoded `dnsRecord` blobs). |
+
+To restore a record from a backup file, pipe the relevant base64 blob into `add --raw <base64> --force`. Each line in the backup file is independent and self-describing.
 
 ### Output
 
