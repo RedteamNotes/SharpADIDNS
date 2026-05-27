@@ -1350,10 +1350,12 @@ namespace SharpADIDNS
                             node.CommitChanges();
                         }
 
+                        SetOwnerResult ownerResult = MaybeSetOwner(opt, node);
+
                         if (opt.Format == "json")
                         {
                             EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc, prev,
-                                opt.Append ? "append" : "replace");
+                                opt.Append ? "append" : "replace", ownerResult);
                         }
                         else
                         {
@@ -1363,6 +1365,8 @@ namespace SharpADIDNS
                                 DnsRecord.TypeName(recordType));
                             Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
                             Logger.Ok("DN: {0}", nodeDn);
+                            if (ownerResult.Attempted && ownerResult.Success)
+                                Logger.Ok("Owner set to: {0} ({1})", ownerResult.Requested, ownerResult.AppliedSid);
                         }
                         return ExitCodes.Success;
                     }
@@ -1394,15 +1398,19 @@ namespace SharpADIDNS
                         newNode.Properties["dNSTombstoned"].Add(false);
                         newNode.CommitChanges();
 
+                        SetOwnerResult ownerResult = MaybeSetOwner(opt, newNode);
+
                         if (opt.Format == "json")
                         {
-                            EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc, null, "create");
+                            EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc, null, "create", ownerResult);
                         }
                         else
                         {
                             Logger.Ok("Added {0} record", DnsRecord.TypeName(recordType));
                             Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
                             Logger.Ok("DN: {0}", nodeDn);
+                            if (ownerResult.Attempted && ownerResult.Success)
+                                Logger.Ok("Owner set to: {0} ({1})", ownerResult.Requested, ownerResult.AppliedSid);
                         }
                     }
                 }
@@ -1662,6 +1670,15 @@ namespace SharpADIDNS
             public List<byte[]> Records = new List<byte[]>();
         }
 
+        internal sealed class SetOwnerResult
+        {
+            public bool   Attempted;
+            public string Requested;
+            public bool   Success;
+            public string AppliedSid;
+            public string Error;
+        }
+
         internal static NodeSnapshot CaptureNodeState(DirectoryEntry node)
         {
             NodeSnapshot s = new NodeSnapshot();
@@ -1675,6 +1692,49 @@ namespace SharpADIDNS
                 }
             }
             return s;
+        }
+
+        internal static SetOwnerResult MaybeSetOwner(Options opt, DirectoryEntry node)
+        {
+            SetOwnerResult r = new SetOwnerResult();
+            if (string.IsNullOrEmpty(opt.SetOwner)) return r;
+
+            r.Attempted = true;
+            r.Requested = opt.SetOwner;
+
+            try
+            {
+                IdentityReference owner;
+                if (opt.SetOwner.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase))
+                {
+                    SecurityIdentifier sid = new SecurityIdentifier(opt.SetOwner);
+                    r.AppliedSid = sid.Value;
+                    owner = sid;
+                }
+                else
+                {
+                    NTAccount acct = new NTAccount(opt.SetOwner);
+                    try
+                    {
+                        r.AppliedSid = ((SecurityIdentifier)acct.Translate(typeof(SecurityIdentifier))).Value;
+                    }
+                    catch { /* not fatal -- SetOwner can still take NTAccount */ }
+                    owner = acct;
+                }
+
+                ActiveDirectorySecurity sec = node.ObjectSecurity;
+                sec.SetOwner(owner);
+                node.CommitChanges();
+                r.Success = true;
+            }
+            catch (Exception ex)
+            {
+                r.Success = false;
+                r.Error = ex.Message;
+                Logger.Warn("--set-owner failed: {0}", ex.Message);
+            }
+
+            return r;
         }
 
         // -------- enum filter helpers --------
@@ -1813,7 +1873,8 @@ namespace SharpADIDNS
         // -------- write-action JSON receipts (only when opt.Format == "json") --------
         private static void EmitAddReceipt(Options opt, string nodeDn, byte[] newRecord,
                                            ushort recordType, string dataDesc,
-                                           NodeSnapshot prev, string operation)
+                                           NodeSnapshot prev, string operation,
+                                           SetOwnerResult setOwner)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("{");
@@ -1834,8 +1895,25 @@ namespace SharpADIDNS
                 sb.Append("\"").Append(Json.Escape(BuildReverseCommand(opt, "remove"))).Append("\"");
             else
                 sb.Append("null");
+            if (setOwner != null && setOwner.Attempted)
+            {
+                sb.Append(",\"set_owner\":");
+                WriteSetOwnerJson(sb, setOwner);
+            }
             sb.Append("}");
             Console.WriteLine(sb.ToString());
+        }
+
+        private static void WriteSetOwnerJson(StringBuilder sb, SetOwnerResult r)
+        {
+            sb.Append("{");
+            sb.AppendFormat("\"requested\":\"{0}\",", Json.Escape(r.Requested));
+            sb.AppendFormat("\"result\":\"{0}\"", r.Success ? "ok" : "error");
+            if (!string.IsNullOrEmpty(r.AppliedSid))
+                sb.AppendFormat(",\"applied_to_sid\":\"{0}\"", Json.Escape(r.AppliedSid));
+            if (!string.IsNullOrEmpty(r.Error))
+                sb.AppendFormat(",\"error\":\"{0}\"", Json.Escape(r.Error));
+            sb.Append("}");
         }
 
         private static void EmitDisableReceipt(Options opt, string nodeDn, NodeSnapshot prev)
@@ -2014,6 +2092,7 @@ namespace SharpADIDNS
         public bool   Force;
         public bool   Append;
         public bool   MimicAging;
+        public string SetOwner;
         public int    SrvPriority = 0;
         public int    SrvWeight   = 0;
         public int    SrvPort     = -1;
@@ -2114,6 +2193,7 @@ namespace SharpADIDNS
                 else if (a == "--force")                            o.Force    = true;
                 else if (a == "--append")                           o.Append   = true;
                 else if (a == "--mimic-aging")                      o.MimicAging = true;
+                else if (a == "--set-owner" && i + 1 < args.Length) o.SetOwner = args[++i];
                 else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
                 else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
                 else if (a == "--format" && i + 1 < args.Length)    o.Format   = args[++i].ToLowerInvariant();
@@ -2263,6 +2343,11 @@ namespace SharpADIDNS
             Console.WriteLine("                         1601-01-01 UTC) to 'now' instead of 0. Defeats");
             Console.WriteLine("                         the 'Timestamp=0 in a dynamic-update zone' IOC.");
             Console.WriteLine("                         No effect on --raw (caller controls the blob).");
+            Console.WriteLine("  --set-owner <SID|name> After add, set the dnsNode owner to the given");
+            Console.WriteLine("                         identity (SID 'S-1-...' or 'DOMAIN\\user'). Needs");
+            Console.WriteLine("                         WriteOwner on the node. Failure does NOT roll back");
+            Console.WriteLine("                         the record; receipt's 'set_owner' field reports");
+            Console.WriteLine("                         the outcome.");
             Console.WriteLine();
         }
 
