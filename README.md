@@ -1,15 +1,15 @@
 # SharpADIDNS
 
-<p>
-  <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform">
-  <img src="https://img.shields.io/badge/language-C%23-239120" alt="Language">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-</p>
-
 <img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
 
 <p>
 A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, built for serious red teaming and packed with tradecraft features tailored for Sliver C2 <code>execute-assembly</code>.
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform">
+  <img src="https://img.shields.io/badge/language-C%23-239120" alt="Language">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
 <p>
