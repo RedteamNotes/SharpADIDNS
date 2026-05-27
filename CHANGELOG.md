@@ -4,6 +4,16 @@ All notable changes to this project. Format roughly follows [Keep a Changelog](h
 
 Each release also has detailed notes attached on the [Releases page](https://github.com/RedteamNotes/SharpADIDNS/releases).
 
+## [0.5.8] - 2026-05-27
+
+Sliver invocation order convention rewritten across the project. No CLI / behavioral change.
+
+### Changed
+- Sliver invocation order is now `execute-assembly SharpADIDNS.exe -p <proc> -- [SharpADIDNS args]`, with `-p` after the assembly path (matches the user's actual Sliver workflow; the previous `-p` before the path was my own incorrect guess).
+- Within `[SharpADIDNS args]`, the action verb (`add` / `query` / `disable` / `remove` / `enum`) is now on its own line directly after the `-- \` line. Subsequent flags are grouped by category (mode / auth / targeting / record data / modifiers) one group per line, in that order. `--script` invocations keep the umbrella-flag layout (no top-level verb to surface).
+- Convention is a writing standard, not a parser requirement (the parser is order-independent; `--c2 add --zone X` works identically to `add --c2 --zone X`).
+- Applied uniformly: `SharpADIDNS.exe` `--help` EXAMPLES (the C2 pattern example), `README.md` (3 Sliver code blocks), `docs/RECIPES.md` (every recipe's Sliver invocation, ~12 places).
+
 ## [0.5.49] - 2026-05-27
 
 Tool intro / tagline rewrite. No CLI / behavioral change.
@@ -153,6 +163,7 @@ Tier 1: "safe to use in serious engagements" threshold reached.
 - Distinct exit codes (0 / 1 / 2 / 3 / 4) for scripting.
 - Single-file .NET Framework 4.x executable, no third-party dependencies, built with the in-box `csc.exe`.
 
+[0.5.8]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.8
 [0.5.49]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.49
 [0.5.41]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.41
 [0.5.4]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.4

