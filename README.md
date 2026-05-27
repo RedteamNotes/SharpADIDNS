@@ -1,25 +1,20 @@
 # SharpADIDNS
 
-<table>
-  <tr>
-    <td width="58%" valign="middle">
-      <h1>SharpADIDNS</h1>
-      <p>
-        A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP,
-        built for serious red teaming and packed with tradecraft features tailored
-        for Sliver C2 execute-assembly.
-      </p>
-      <p>
-        Built around <code>System.DirectoryServices</code>. Targets .NET Framework 4.x
-        and produces a small standalone <code>.exe</code>. Intended for authorized
-        red team, pentest engagements, and lab work.
-      </p>
-    </td>
-    <td width="42%" align="center" valign="middle">
-      <img src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
-    </td>
-  </tr>
-</table>
+<img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
+
+<p>
+  A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP,
+  built for serious red teaming and packed with tradecraft features tailored
+  for Sliver C2 execute-assembly.
+</p>
+
+<p>
+  Built around <code>System.DirectoryServices</code>. Targets .NET Framework 4.x
+  and produces a small standalone <code>.exe</code>. Intended for authorized
+  red team, pentest engagements, and lab work.
+</p>
+
+<br clear="right">
 
 ## Capabilities
 
