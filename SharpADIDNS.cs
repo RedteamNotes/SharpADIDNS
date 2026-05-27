@@ -42,6 +42,20 @@ namespace SharpADIDNS
 
                 Options opt = Options.Parse(args);
 
+                // --c2 forces a coherent set of in-memory / unattended defaults.
+                // Explicit flags on the same command line still apply on top of
+                // these (e.g. --c2 --format text would still produce text), but
+                // any non-set default flips to the C2-friendly value.
+                if (opt.C2)
+                {
+                    opt.AllowCleartextPassword = true;
+                    opt.Yes                    = true;
+                    opt.NoColor                = true;
+                    opt.Quiet                  = true;
+                    if (opt.Format == "text")   opt.Format   = "json";
+                    if (string.IsNullOrEmpty(opt.BackupTo)) opt.BackupTo = "-";
+                }
+
                 Logger.ColorEnabled = opt.NoColor ? false :
                                       opt.Color ? true :
                                       !Console.IsOutputRedirected;
@@ -2014,6 +2028,7 @@ namespace SharpADIDNS
         public bool   Yes;
         public bool   RequirePdc;
         public bool   ShowPdc;
+        public bool   C2;
 
         // Enum filters
         public string FilterType;
@@ -2095,6 +2110,7 @@ namespace SharpADIDNS
                 else if (a == "-y" || a == "--yes")                 o.Yes      = true;
                 else if (a == "--require-pdc")                      o.RequirePdc = true;
                 else if (a == "--show-pdc")                         o.ShowPdc    = true;
+                else if (a == "--c2")                               o.C2         = true;
                 else if (a == "--filter-type" && i + 1 < args.Length) o.FilterType = args[++i];
                 else if (a == "--filter-name" && i + 1 < args.Length) o.FilterName = args[++i];
                 else if (a == "--only-tombstoned")                  o.OnlyTombstoned = true;
@@ -2252,6 +2268,17 @@ namespace SharpADIDNS
         private static void PrintSafety()
         {
             Console.WriteLine("SAFETY");
+            Console.WriteLine("  --c2                   Umbrella for in-memory / unattended execution");
+            Console.WriteLine("                         (Sliver execute-assembly, CI, scripted ops).");
+            Console.WriteLine("                         Implicit defaults (each can be overridden):");
+            Console.WriteLine("                           --allow-cleartext-password  (no FUD warning)");
+            Console.WriteLine("                           --yes                       (no prompts)");
+            Console.WriteLine("                           --no-color                  (clean stdout)");
+            Console.WriteLine("                           --quiet                     (less channel noise)");
+            Console.WriteLine("                           --format json               (machine-readable)");
+            Console.WriteLine("                           --backup-to -               (stdout, no disk)");
+            Console.WriteLine("                         Pair with --password-base64 <b64> for clean");
+            Console.WriteLine("                         credential transport across shell layers.");
             Console.WriteLine("  --dry-run              Show what would change; do not write to AD");
             Console.WriteLine("  --backup-to <file|->   Append a JSON line per affected node before");
             Console.WriteLine("                         modifying it. Use '-' to write to stdout instead");
