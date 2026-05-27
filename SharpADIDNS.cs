@@ -1055,6 +1055,12 @@ namespace SharpADIDNS
 
             using (DirectoryEntry node = LdapOps.Open(opt, nodeDn))
             {
+                // Ask for the security descriptor up front so a later
+                // ObjectSecurity access doesn't trigger a second LDAP query.
+                node.Options.SecurityMasks = SecurityMasks.Owner |
+                                             SecurityMasks.Group |
+                                             SecurityMasks.Dacl;
+
                 DirectoryServicesCOMException err;
                 if (!LdapOps.TryBind(node, out err))
                 {
@@ -1065,6 +1071,22 @@ namespace SharpADIDNS
                     }
                     ErrorReporter.PrintCom(err);
                     return ErrorReporter.ToExitCode(err);
+                }
+
+                // Batch-load all attributes we'll read into a single LDAP
+                // search instead of one search per property access.
+                try
+                {
+                    node.RefreshCache(new[] {
+                        "distinguishedName", "name", "dNSTombstoned",
+                        "whenCreated", "whenChanged",
+                        "dnsRecord", "nTSecurityDescriptor"
+                    });
+                }
+                catch
+                {
+                    // If RefreshCache fails (e.g. access-denied on some attrs),
+                    // fall back to lazy per-property loads. Not fatal.
                 }
 
                 if (jsonMode)
