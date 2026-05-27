@@ -2599,10 +2599,9 @@ namespace SharpADIDNS
             Console.WriteLine("https://github.com/RedteamNotes/SharpADIDNS");
             Console.WriteLine("By @RedteamNotes   Email: 888256@gmail.com");
             Console.WriteLine();
-            Console.WriteLine("  C# command-line tool for reading and modifying Active Directory-Integrated");
-            Console.WriteLine("  DNS (ADIDNS) records over LDAP, with a tradecraft layer purpose-built for");
-            Console.WriteLine("  Sliver execute-assembly engagements: dry-run + structured backup, JSON");
-            Console.WriteLine("  receipts, batch scripting, and active fingerprint mitigation.");
+            Console.WriteLine("  A C# CLI tool for reading and modifying AD-Integrated DNS records over ");
+            Console.WriteLine("  LDAP, built for serious red teaming and packed with tradecraft features");
+            Console.WriteLine("  tailored for Sliver execute-assembly.");
             Console.WriteLine();
             Console.WriteLine("  Tip: any argument may be replaced by '@file.txt' to read more args");
             Console.WriteLine("  from that file (one per whitespace; '#' starts a line comment).");
