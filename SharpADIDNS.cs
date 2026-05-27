@@ -399,31 +399,31 @@ namespace SharpADIDNS
             return Bin.ReadU16Le(data, 2);
         }
 
-        public static byte[] BuildA(IPAddress ip, int ttl)
+        public static byte[] BuildA(IPAddress ip, int ttl, uint timestamp = 0)
         {
             if (ip.AddressFamily != AddressFamily.InterNetwork)
                 throw new ArgumentException("BuildA requires an IPv4 address");
             byte[] data = ip.GetAddressBytes();
-            return BuildHeader(TypeA, data, ttl);
+            return BuildHeader(TypeA, data, ttl, timestamp);
         }
 
-        public static byte[] BuildAaaa(IPAddress ip, int ttl)
+        public static byte[] BuildAaaa(IPAddress ip, int ttl, uint timestamp = 0)
         {
             if (ip.AddressFamily != AddressFamily.InterNetworkV6)
                 throw new ArgumentException("BuildAaaa requires an IPv6 address");
             byte[] data = ip.GetAddressBytes();
-            return BuildHeader(TypeAaaa, data, ttl);
+            return BuildHeader(TypeAaaa, data, ttl, timestamp);
         }
 
-        public static byte[] BuildCname(string target, int ttl)
+        public static byte[] BuildCname(string target, int ttl, uint timestamp = 0)
         {
             if (string.IsNullOrWhiteSpace(target))
                 throw new ArgumentException("CNAME target cannot be empty");
             byte[] data = EncodeCountName(target);
-            return BuildHeader(TypeCname, data, ttl);
+            return BuildHeader(TypeCname, data, ttl, timestamp);
         }
 
-        public static byte[] BuildTxt(string text, int ttl)
+        public static byte[] BuildTxt(string text, int ttl, uint timestamp = 0)
         {
             if (text == null) text = "";
             byte[] raw = Encoding.ASCII.GetBytes(text);
@@ -433,19 +433,19 @@ namespace SharpADIDNS
             byte[] data = new byte[1 + raw.Length];
             data[0] = (byte)raw.Length;
             Buffer.BlockCopy(raw, 0, data, 1, raw.Length);
-            return BuildHeader(TypeTxt, data, ttl);
+            return BuildHeader(TypeTxt, data, ttl, timestamp);
         }
 
-        public static byte[] BuildPtr(string target, int ttl)
+        public static byte[] BuildPtr(string target, int ttl, uint timestamp = 0)
         {
             if (string.IsNullOrWhiteSpace(target))
                 throw new ArgumentException("PTR target cannot be empty");
             byte[] data = EncodeCountName(target);
-            return BuildHeader(TypePtr, data, ttl);
+            return BuildHeader(TypePtr, data, ttl, timestamp);
         }
 
         public static byte[] BuildSrv(ushort priority, ushort weight, ushort port,
-                                      string target, int ttl)
+                                      string target, int ttl, uint timestamp = 0)
         {
             if (string.IsNullOrWhiteSpace(target))
                 throw new ArgumentException("SRV target cannot be empty");
@@ -455,10 +455,10 @@ namespace SharpADIDNS
             Bin.WriteU16Be(data, 2, weight);
             Bin.WriteU16Be(data, 4, port);
             Buffer.BlockCopy(name, 0, data, 6, name.Length);
-            return BuildHeader(TypeSrv, data, ttl);
+            return BuildHeader(TypeSrv, data, ttl, timestamp);
         }
 
-        public static byte[] BuildMx(ushort preference, string exchange, int ttl)
+        public static byte[] BuildMx(ushort preference, string exchange, int ttl, uint timestamp = 0)
         {
             if (string.IsNullOrWhiteSpace(exchange))
                 throw new ArgumentException("MX exchange cannot be empty");
@@ -466,7 +466,16 @@ namespace SharpADIDNS
             byte[] data = new byte[2 + name.Length];
             Bin.WriteU16Be(data, 0, preference);
             Buffer.BlockCopy(name, 0, data, 2, name.Length);
-            return BuildHeader(TypeMx, data, ttl);
+            return BuildHeader(TypeMx, data, ttl, timestamp);
+        }
+
+        public static uint AgingTimestampNow()
+        {
+            // Hours since 1601-01-01 00:00:00 UTC (the AD "aging timestamp" base).
+            // Matches the value a real DDNS update would write.
+            DateTime epoch = new DateTime(1601, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            double hours = (DateTime.UtcNow - epoch).TotalHours;
+            return (uint)hours;
         }
 
         public static byte[] BuildTombstone()
@@ -478,7 +487,7 @@ namespace SharpADIDNS
             return BuildHeader(TypeZero, data, 0);
         }
 
-        private static byte[] BuildHeader(ushort type, byte[] data, int ttl)
+        private static byte[] BuildHeader(ushort type, byte[] data, int ttl, uint timestamp = 0)
         {
             byte[] record = new byte[24 + data.Length];
             Bin.WriteU16Le(record, 0, (ushort)data.Length);   // DataLength
@@ -489,7 +498,7 @@ namespace SharpADIDNS
             Bin.WriteU32Le(record, 8, 1);                     // Serial
             Bin.WriteU32Be(record, 12, (uint)ttl);            // TTL (big-endian)
             Bin.WriteU32Le(record, 16, 0);                    // Reserved
-            Bin.WriteU32Le(record, 20, 0);                    // Timestamp 0 = static
+            Bin.WriteU32Le(record, 20, timestamp);            // Timestamp: 0=static, else hours-since-1601
             Buffer.BlockCopy(data, 0, record, 24, data.Length);
             return record;
         }
@@ -1210,37 +1219,38 @@ namespace SharpADIDNS
             else
             {
                 string t = opt.RecordType.ToUpperInvariant();
+                uint ts = opt.MimicAging ? DnsRecord.AgingTimestampNow() : 0u;
                 IPAddress ip;
                 switch (t)
                 {
                     case "A":
                         if (!IPAddress.TryParse(opt.Data, out ip) || ip.AddressFamily != AddressFamily.InterNetwork)
                             throw new ArgumentException("--type A requires an IPv4 address in --data");
-                        record = DnsRecord.BuildA(ip, opt.Ttl);
+                        record = DnsRecord.BuildA(ip, opt.Ttl, ts);
                         recordType = DnsRecord.TypeA;
                         dataDesc = ip.ToString();
                         break;
                     case "AAAA":
                         if (!IPAddress.TryParse(opt.Data, out ip) || ip.AddressFamily != AddressFamily.InterNetworkV6)
                             throw new ArgumentException("--type AAAA requires an IPv6 address in --data");
-                        record = DnsRecord.BuildAaaa(ip, opt.Ttl);
+                        record = DnsRecord.BuildAaaa(ip, opt.Ttl, ts);
                         recordType = DnsRecord.TypeAaaa;
                         dataDesc = ip.ToString();
                         break;
                     case "CNAME":
-                        record = DnsRecord.BuildCname(opt.Data, opt.Ttl);
+                        record = DnsRecord.BuildCname(opt.Data, opt.Ttl, ts);
                         recordType = DnsRecord.TypeCname;
                         dataDesc = opt.Data;
                         break;
                     case "TXT":
-                        record = DnsRecord.BuildTxt(opt.Data, opt.Ttl);
+                        record = DnsRecord.BuildTxt(opt.Data, opt.Ttl, ts);
                         recordType = DnsRecord.TypeTxt;
                         dataDesc = "\"" + opt.Data + "\"";
                         break;
                     case "PTR":
                         if (string.IsNullOrWhiteSpace(opt.Data))
                             throw new ArgumentException("--type PTR requires --data <target FQDN>");
-                        record = DnsRecord.BuildPtr(opt.Data, opt.Ttl);
+                        record = DnsRecord.BuildPtr(opt.Data, opt.Ttl, ts);
                         recordType = DnsRecord.TypePtr;
                         dataDesc = opt.Data;
                         break;
@@ -1252,7 +1262,7 @@ namespace SharpADIDNS
                         record = DnsRecord.BuildSrv((ushort)opt.SrvPriority,
                                                     (ushort)opt.SrvWeight,
                                                     (ushort)opt.SrvPort,
-                                                    opt.Data, opt.Ttl);
+                                                    opt.Data, opt.Ttl, ts);
                         recordType = DnsRecord.TypeSrv;
                         dataDesc = string.Format("{0} {1} {2} {3}",
                             opt.SrvPriority, opt.SrvWeight, opt.SrvPort, opt.Data);
@@ -1260,7 +1270,7 @@ namespace SharpADIDNS
                     case "MX":
                         if (string.IsNullOrWhiteSpace(opt.Data))
                             throw new ArgumentException("--type MX requires --data <exchange FQDN>");
-                        record = DnsRecord.BuildMx((ushort)opt.MxPref, opt.Data, opt.Ttl);
+                        record = DnsRecord.BuildMx((ushort)opt.MxPref, opt.Data, opt.Ttl, ts);
                         recordType = DnsRecord.TypeMx;
                         dataDesc = string.Format("{0} {1}", opt.MxPref, opt.Data);
                         break;
@@ -1744,11 +1754,13 @@ namespace SharpADIDNS
             ushort type   = DnsRecord.GetType(data);
             ushort dataLen = Bin.ReadU16Le(data, 0);
             uint   ttl    = Bin.ReadU32Be(data, 12);
+            uint   timestamp = Bin.ReadU32Le(data, 20);
 
             sb.Append("{");
             sb.AppendFormat("\"type\":\"{0}\",", DnsRecord.TypeName(type));
             sb.AppendFormat("\"type_id\":{0},", type);
             sb.AppendFormat("\"ttl\":{0},", ttl);
+            sb.AppendFormat("\"timestamp\":{0},", timestamp);
 
             switch (type)
             {
@@ -2001,6 +2013,7 @@ namespace SharpADIDNS
         public string RawBase64;
         public bool   Force;
         public bool   Append;
+        public bool   MimicAging;
         public int    SrvPriority = 0;
         public int    SrvWeight   = 0;
         public int    SrvPort     = -1;
@@ -2100,6 +2113,7 @@ namespace SharpADIDNS
                 else if (a == "--ldaps")                            o.Ldaps    = true;
                 else if (a == "--force")                            o.Force    = true;
                 else if (a == "--append")                           o.Append   = true;
+                else if (a == "--mimic-aging")                      o.MimicAging = true;
                 else if (a == "-v" || a == "--verbose")             o.Verbose  = true;
                 else if (a == "-q" || a == "--quiet")               o.Quiet    = true;
                 else if (a == "--format" && i + 1 < args.Length)    o.Format   = args[++i].ToLowerInvariant();
@@ -2245,6 +2259,10 @@ namespace SharpADIDNS
             Console.WriteLine("  --append               Keep ALL existing records on the node and add one");
             Console.WriteLine("                         more. Mutually exclusive with --force. Refuses on");
             Console.WriteLine("                         tombstoned nodes (use --force to un-tombstone).");
+            Console.WriteLine("  --mimic-aging          Set the dnsRecord Timestamp field (hours since");
+            Console.WriteLine("                         1601-01-01 UTC) to 'now' instead of 0. Defeats");
+            Console.WriteLine("                         the 'Timestamp=0 in a dynamic-update zone' IOC.");
+            Console.WriteLine("                         No effect on --raw (caller controls the blob).");
             Console.WriteLine();
         }
 
