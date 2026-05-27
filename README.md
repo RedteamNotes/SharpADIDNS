@@ -1,30 +1,17 @@
 # SharpADIDNS
 
-<img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="260">
+<img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
 
 <p>
-  <strong>SharpADIDNS</strong> is a C# CLI tool for reading and modifying
-  AD-Integrated DNS records over LDAP, built for serious red-team use and
-  tailored for Sliver C2 <code>execute-assembly</code> workflows.
+A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, built for serious red teaming and packed with tradecraft features tailored for Sliver C2 <code>execute-assembly</code>.
 </p>
 
 <p>
-  It provides first-class Sliver mode with <code>--c2</code>, safe pre-flight
-  validation with <code>--dry-run</code>, structured rollback data through
-  <code>--backup-to</code>, batch execution with <code>--script</code>, and
-  JSON receipts with cross-invocation <code>correlation_id</code>.
+Built for serious red-team use: first-class Sliver <code>execute-assembly</code> mode <code>--c2</code>, <code>--dry-run</code> pre-flight with structured <code>--backup-to</code> rollback, batch scripting <code>--script</code>, JSON receipts with cross-invocation <code>correlation_id</code>, and active fingerprint mitigation — <code>--mimic-aging</code> defeats the <code>Timestamp=0</code> IOC, <code>--set-owner</code> camouflages object ownership, <code>--require-pdc</code> keeps writes off non-PDC replicas.
 </p>
 
 <p>
-  Tradecraft-oriented features include <code>--mimic-aging</code> to avoid the
-  <code>Timestamp=0</code> IOC, <code>--set-owner</code> to camouflage object
-  ownership, and <code>--require-pdc</code> to keep writes off non-PDC replicas.
-</p>
-
-<p>
-  Built around <code>System.DirectoryServices</code>. Targets .NET Framework 4.x
-  and produces a small standalone <code>.exe</code>. Intended for authorized
-  red-team operations, pentest engagements, and lab work.
+Built around <code>System.DirectoryServices</code>. Targets .NET Framework 4.x and produces a small standalone <code>.exe</code>. Intended for authorized red team / pentest engagements and lab work.
 </p>
 
 <p>
