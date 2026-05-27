@@ -2363,7 +2363,12 @@ namespace SharpADIDNS
                         throw new ArgumentException("--script-on-error must be 'halt' or 'continue'");
                     o.ScriptOnError = mode;
                 }
-                else if (a == "--filter-type" && i + 1 < args.Length) o.FilterType = args[++i];
+                else if (a == "--filter-type" && i + 1 < args.Length)
+                {
+                    // Accumulative: --filter-type A --filter-type AAAA  ==  --filter-type A,AAAA
+                    string v = args[++i];
+                    o.FilterType = string.IsNullOrEmpty(o.FilterType) ? v : o.FilterType + "," + v;
+                }
                 else if (a == "--filter-name" && i + 1 < args.Length) o.FilterName = args[++i];
                 else if (a == "--only-tombstoned")                  o.OnlyTombstoned = true;
                 else if (a == "--no-tombstoned")                    o.NoTombstoned   = true;
