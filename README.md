@@ -1,5 +1,11 @@
 # SharpADIDNS
 
+<p>
+  <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform">
+  <img src="https://img.shields.io/badge/language-C%23-239120" alt="Language">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+</p>
+
 <img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
 
 <p>
@@ -12,12 +18,6 @@ Built for serious red-team use: first-class Sliver <code>execute-assembly</code>
 
 <p>
 Built around <code>System.DirectoryServices</code>. Targets .NET Framework 4.x and produces a small standalone <code>.exe</code>. Intended for authorized red team / pentest engagements and lab work.
-</p>
-
-<p>
-  <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform">
-  <img src="https://img.shields.io/badge/language-C%23-239120" alt="Language">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
 <br clear="right">
