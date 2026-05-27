@@ -23,7 +23,7 @@
 </p>
 
 <p>
-强烈建议阅读[English](README.md)版本，表意更准确，Github审计策略更宽松。
+强烈建议阅读英语版本，表意更准确，Github审计策略更宽松。
 </p>
 
 <br clear="right">
