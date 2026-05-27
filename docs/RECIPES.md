@@ -42,7 +42,7 @@ Output on stdout is 4 JSON arrays (one per statement) plus a `script_summary`. P
 ```
 
 Look for:
-- Custom zones beyond the obvious one (often `dev.corp.local`, `lab.corp.local`)
+- Custom zones beyond the obvious one (often `dev.redteamnotes.local`, `lab.redteamnotes.local`)
 - Wildcard `*` records (already deployed → don't clobber)
 - `wpad` / `isatap` / `localhost` (legacy / honeypot indicators)
 - SCCM / SQL / printer hostnames (high-impact targets)

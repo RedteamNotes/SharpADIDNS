@@ -195,27 +195,27 @@ internal sealed class TestRunner
 
     private static void TestBuildPtr()
     {
-        byte[] rec = DnsRecord.BuildPtr("host.corp.local", 600);
+        byte[] rec = DnsRecord.BuildPtr("host.redteamnotes.local", 600);
         AssertEq(DnsRecord.TypePtr,   DnsRecord.GetType(rec),                "type");
-        AssertEq("host.corp.local",   DnsRecord.DecodeCountName(rec, 24),    "decoded");
+        AssertEq("host.redteamnotes.local",   DnsRecord.DecodeCountName(rec, 24),    "decoded");
     }
 
     private static void TestBuildSrv()
     {
-        byte[] rec = DnsRecord.BuildSrv(10, 50, 389, "attacker.corp.local", 600);
+        byte[] rec = DnsRecord.BuildSrv(10, 50, 389, "attacker.redteamnotes.local", 600);
         AssertEq(DnsRecord.TypeSrv,    DnsRecord.GetType(rec),               "type");
         AssertEq((ushort)10,           Bin.ReadU16Be(rec, 24),               "priority");
         AssertEq((ushort)50,           Bin.ReadU16Be(rec, 26),               "weight");
         AssertEq((ushort)389,          Bin.ReadU16Be(rec, 28),               "port");
-        AssertEq("attacker.corp.local",DnsRecord.DecodeCountName(rec, 30),   "target");
+        AssertEq("attacker.redteamnotes.local",DnsRecord.DecodeCountName(rec, 30),   "target");
     }
 
     private static void TestBuildMx()
     {
-        byte[] rec = DnsRecord.BuildMx(20, "mail.corp.local", 600);
+        byte[] rec = DnsRecord.BuildMx(20, "mail.redteamnotes.local", 600);
         AssertEq(DnsRecord.TypeMx,    DnsRecord.GetType(rec),                "type");
         AssertEq((ushort)20,          Bin.ReadU16Be(rec, 24),                "preference");
-        AssertEq("mail.corp.local",   DnsRecord.DecodeCountName(rec, 26),    "exchange");
+        AssertEq("mail.redteamnotes.local",   DnsRecord.DecodeCountName(rec, 26),    "exchange");
     }
 
     private static void TestBuildTombstone()
