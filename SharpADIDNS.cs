@@ -234,10 +234,28 @@ namespace SharpADIDNS
                     ErrorReporter.PrintCom(ex);
                     if (halt) break;
                 }
+                catch (System.Runtime.InteropServices.COMException ex)
+                {
+                    // Catches generic COM faults (e.g. DNS lookup failure
+                    // before LDAP, bad ADS path) that aren't
+                    // DirectoryServicesCOMException -- without this, --continue-on-error
+                    // would abort the script on the first such error.
+                    failed++;
+                    Logger.Err("Statement {0} COM error: {1}", total, ex.Message);
+                    if (halt) break;
+                }
                 catch (ArgumentException ex)
                 {
                     failed++;
                     Logger.Err("Statement {0}: {1}", total, ex.Message);
+                    if (halt) break;
+                }
+                catch (Exception ex)
+                {
+                    // Final safety net so unexpected exception types from one
+                    // statement don't sink the whole script in continue mode.
+                    failed++;
+                    Logger.Err("Statement {0} error ({1}): {2}", total, ex.GetType().Name, ex.Message);
                     if (halt) break;
                 }
             }
@@ -2363,6 +2381,7 @@ namespace SharpADIDNS
                         throw new ArgumentException("--script-on-error must be 'halt' or 'continue'");
                     o.ScriptOnError = mode;
                 }
+                else if (a == "--continue-on-error")                o.ScriptOnError = "continue";
                 else if (a == "--filter-type" && i + 1 < args.Length)
                 {
                     // Accumulative: --filter-type A --filter-type AAAA  ==  --filter-type A,AAAA
@@ -2570,6 +2589,7 @@ namespace SharpADIDNS
             Console.WriteLine("                         outer flags). Outer must not also specify an action.");
             Console.WriteLine("                         Saves N-1 sacrificial-process spawns / EID 1 events.");
             Console.WriteLine("  --script-on-error <m>  halt | continue   (default: halt)");
+            Console.WriteLine("  --continue-on-error    Alias for '--script-on-error continue'");
             Console.WriteLine("  --dry-run              Show what would change; do not write to AD");
             Console.WriteLine("  --backup-to <file|->   Append a JSON line per affected node before");
             Console.WriteLine("                         modifying it. Use '-' to write to stdout instead");
