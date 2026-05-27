@@ -8,5 +8,5 @@
 bin/
 obj/
 release/
-tests/Tests.exe
 .claude/
+tests/Tests.exe
