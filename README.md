@@ -24,6 +24,8 @@ Built around <code>System.DirectoryServices</code>. Targets .NET Framework 4.x a
 
 <img align="right" src="assets/SharpADIDNS-SS-Alpha.png" alt="SharpADIDNS ScreenShot" width="100%">
 
+<br clear="right">
+
 ## Capabilities
 
 | Action  | Description |
