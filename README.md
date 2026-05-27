@@ -22,7 +22,7 @@ Built around <code>System.DirectoryServices</code>. Targets .NET Framework 4.x a
 
 <br clear="right">
 
-<img align="right" src="assets/SharpADIDNS-SS.png" alt="SharpADIDNS ScreenShot" width="100%">
+<img align="right" src="assets/SharpADIDNS-SS-Alpha.png" alt="SharpADIDNS ScreenShot" width="100%">
 
 ## Capabilities
 
