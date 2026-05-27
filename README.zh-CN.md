@@ -454,7 +454,7 @@ sliver > execute-assembly SharpADIDNS.exe -p dllhost.exe -- \
         --raw <base64-from-previous_state> --force
 ```
 
-### 宿主进程的选择
+### 牺牲进程的选择
 
 避免用 `notepad.exe` — `notepad.exe` 向 DC 发 LDAP 查询是软异常，部分 SIEM 规则会告警。优先选合法会发 LDAP 流量或本身网络活跃不显眼的进程：
 
