@@ -1494,7 +1494,17 @@ namespace SharpADIDNS
 
                         if (opt.DryRun)
                         {
-                            PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, node, opt.Append);
+                            if (opt.Format == "json")
+                            {
+                                NodeSnapshot prevForDry = CaptureNodeState(node);
+                                EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc,
+                                    prevForDry, opt.Append ? "append" : "replace",
+                                    null, "would_do");
+                            }
+                            else
+                            {
+                                PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, node, opt.Append);
+                            }
                             return ExitCodes.Success;
                         }
 
@@ -1523,7 +1533,7 @@ namespace SharpADIDNS
                         if (opt.Format == "json")
                         {
                             EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc, prev,
-                                opt.Append ? "append" : "replace", ownerResult);
+                                opt.Append ? "append" : "replace", ownerResult, "ok");
                         }
                         else
                         {
@@ -1553,7 +1563,15 @@ namespace SharpADIDNS
                 {
                     if (opt.DryRun)
                     {
-                        PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, null, false);
+                        if (opt.Format == "json")
+                        {
+                            EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc,
+                                null, "create", null, "would_do");
+                        }
+                        else
+                        {
+                            PrintAddPlan(opt, nodeDn, record, recordType, dataDesc, null, false);
+                        }
                         return ExitCodes.Success;
                     }
 
@@ -1570,7 +1588,7 @@ namespace SharpADIDNS
 
                         if (opt.Format == "json")
                         {
-                            EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc, null, "create", ownerResult);
+                            EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc, null, "create", ownerResult, "ok");
                         }
                         else
                         {
@@ -1629,7 +1647,15 @@ namespace SharpADIDNS
 
                 if (opt.DryRun)
                 {
-                    PrintDisablePlan(opt, nodeDn, node);
+                    if (opt.Format == "json")
+                    {
+                        NodeSnapshot prevForDry = CaptureNodeState(node);
+                        EmitDisableReceipt(opt, nodeDn, prevForDry, "would_do");
+                    }
+                    else
+                    {
+                        PrintDisablePlan(opt, nodeDn, node);
+                    }
                     return ExitCodes.Success;
                 }
 
@@ -1649,7 +1675,7 @@ namespace SharpADIDNS
 
                 if (opt.Format == "json")
                 {
-                    EmitDisableReceipt(opt, nodeDn, prev);
+                    EmitDisableReceipt(opt, nodeDn, prev, "ok");
                 }
                 else
                 {
@@ -1702,7 +1728,15 @@ namespace SharpADIDNS
 
                     if (opt.DryRun)
                     {
-                        PrintRemovePlan(opt, nodeDn, node);
+                        if (opt.Format == "json")
+                        {
+                            NodeSnapshot prevForDry = CaptureNodeState(node);
+                            EmitRemoveReceipt(opt, nodeDn, prevForDry, "would_do");
+                        }
+                        else
+                        {
+                            PrintRemovePlan(opt, nodeDn, node);
+                        }
                         return ExitCodes.Success;
                     }
 
@@ -1717,7 +1751,7 @@ namespace SharpADIDNS
 
                     if (opt.Format == "json")
                     {
-                        EmitRemoveReceipt(opt, nodeDn, prev);
+                        EmitRemoveReceipt(opt, nodeDn, prev, "ok");
                     }
                     else
                     {
@@ -2042,13 +2076,13 @@ namespace SharpADIDNS
         private static void EmitAddReceipt(Options opt, string nodeDn, byte[] newRecord,
                                            ushort recordType, string dataDesc,
                                            NodeSnapshot prev, string operation,
-                                           SetOwnerResult setOwner)
+                                           SetOwnerResult setOwner, string result)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("{");
             sb.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
             sb.Append("\"action\":\"add\",");
-            sb.Append("\"result\":\"ok\",");
+            sb.AppendFormat("\"result\":\"{0}\",", result);
             sb.AppendFormat("\"operation\":\"{0}\",", operation);
             sb.AppendFormat("\"dn\":\"{0}\",",   Json.Escape(nodeDn));
             sb.AppendFormat("\"zone\":\"{0}\",", Json.Escape(opt.Zone));
@@ -2085,13 +2119,13 @@ namespace SharpADIDNS
             sb.Append("}");
         }
 
-        private static void EmitDisableReceipt(Options opt, string nodeDn, NodeSnapshot prev)
+        private static void EmitDisableReceipt(Options opt, string nodeDn, NodeSnapshot prev, string result)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("{");
             sb.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
             sb.Append("\"action\":\"disable\",");
-            sb.Append("\"result\":\"ok\",");
+            sb.AppendFormat("\"result\":\"{0}\",", result);
             sb.AppendFormat("\"dn\":\"{0}\",",   Json.Escape(nodeDn));
             sb.AppendFormat("\"zone\":\"{0}\",", Json.Escape(opt.Zone));
             sb.AppendFormat("\"name\":\"{0}\",", Json.Escape(opt.Name));
@@ -2102,13 +2136,13 @@ namespace SharpADIDNS
             Console.WriteLine(sb.ToString());
         }
 
-        private static void EmitRemoveReceipt(Options opt, string nodeDn, NodeSnapshot prev)
+        private static void EmitRemoveReceipt(Options opt, string nodeDn, NodeSnapshot prev, string result)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("{");
             sb.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
             sb.Append("\"action\":\"remove\",");
-            sb.Append("\"result\":\"ok\",");
+            sb.AppendFormat("\"result\":\"{0}\",", result);
             sb.AppendFormat("\"dn\":\"{0}\",",   Json.Escape(nodeDn));
             sb.AppendFormat("\"zone\":\"{0}\",", Json.Escape(opt.Zone));
             sb.AppendFormat("\"name\":\"{0}\",", Json.Escape(opt.Name));
