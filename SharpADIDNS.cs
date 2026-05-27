@@ -2601,7 +2601,7 @@ namespace SharpADIDNS
             Console.WriteLine();
             Console.WriteLine("  A C# CLI tool for reading and modifying AD-Integrated DNS records over ");
             Console.WriteLine("  LDAP, built for serious red teaming and packed with tradecraft features");
-            Console.WriteLine("  tailored for Sliver execute-assembly.");
+            Console.WriteLine("  tailored for Sliver C2 execute-assembly.");
             Console.WriteLine();
             Console.WriteLine("  Tip: any argument may be replaced by '@file.txt' to read more args");
             Console.WriteLine("  from that file (one per whitespace; '#' starts a line comment).");
