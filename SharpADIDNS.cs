@@ -2101,11 +2101,17 @@ namespace SharpADIDNS
         {
             Console.WriteLine("SAFETY");
             Console.WriteLine("  --dry-run              Show what would change; do not write to AD");
-            Console.WriteLine("  --backup-to <file>     Append a JSON line per affected node before");
-            Console.WriteLine("                         modifying it. One file accumulates entries across");
-            Console.WriteLine("                         runs. Fields: timestamp, action, dn,");
+            Console.WriteLine("  --backup-to <file|->   Append a JSON line per affected node before");
+            Console.WriteLine("                         modifying it. Use '-' to write to stdout instead");
+            Console.WriteLine("                         of a file (no disk artifact -- useful when running");
+            Console.WriteLine("                         in-memory via Sliver execute-assembly etc.). One");
+            Console.WriteLine("                         file accumulates entries across runs. Fields:");
+            Console.WriteLine("                         _type='backup', timestamp, action, dn,");
             Console.WriteLine("                         dNSTombstoned, records (base64-encoded blobs).");
             Console.WriteLine("                         Restore via 'add --raw <base64> --force'.");
+            Console.WriteLine("                         In --format json mode, the action receipt already");
+            Console.WriteLine("                         carries previous_state, so '--backup-to -' is");
+            Console.WriteLine("                         suppressed to avoid duplicate stdout output.");
             Console.WriteLine("  -y, --yes              Skip interactive confirmation on high-risk ops:");
             Console.WriteLine("                           - any 'remove'");
             Console.WriteLine("                           - 'add --name \"*\"' (wildcard)");
@@ -2345,6 +2351,11 @@ namespace SharpADIDNS
         {
             if (string.IsNullOrEmpty(opt.BackupTo)) return;
 
+            // In --format json mode with stdout sentinel, the action receipt
+            // already carries previous_state -- avoid duplicating it on stdout.
+            bool toStdout = opt.BackupTo == "-";
+            if (toStdout && opt.Format == "json") return;
+
             bool tomb = node != null && Actions.IsTombstoned(node);
             List<byte[]> records = new List<byte[]>();
             if (node != null && node.Properties.Contains("dnsRecord"))
@@ -2358,6 +2369,7 @@ namespace SharpADIDNS
 
             StringBuilder json = new StringBuilder();
             json.Append("{");
+            json.Append("\"_type\":\"backup\",");
             json.Append("\"timestamp\":\"").Append(DateTime.UtcNow.ToString("o")).Append("\",");
             json.Append("\"action\":\"").Append(Json.Escape(action)).Append("\",");
             json.Append("\"dn\":\"").Append(Json.Escape(nodeDn)).Append("\",");
@@ -2368,19 +2380,26 @@ namespace SharpADIDNS
                 if (i > 0) json.Append(",");
                 json.Append("\"").Append(Convert.ToBase64String(records[i])).Append("\"");
             }
-            json.Append("]}\n");
+            json.Append("]}");
 
-            try
+            if (toStdout)
             {
-                File.AppendAllText(opt.BackupTo, json.ToString(), Encoding.UTF8);
+                Console.WriteLine(json.ToString());
+                Logger.Info(opt, "Snapshot emitted on stdout ({0} record(s))", records.Count);
             }
-            catch (Exception ex)
+            else
             {
-                throw new IOException(
-                    "Failed to write --backup-to file '" + opt.BackupTo + "': " + ex.Message, ex);
+                try
+                {
+                    File.AppendAllText(opt.BackupTo, json.ToString() + "\n", Encoding.UTF8);
+                }
+                catch (Exception ex)
+                {
+                    throw new IOException(
+                        "Failed to write --backup-to file '" + opt.BackupTo + "': " + ex.Message, ex);
+                }
+                Logger.Info(opt, "Snapshot appended to: {0} ({1} record(s))", opt.BackupTo, records.Count);
             }
-
-            Logger.Info(opt, "Snapshot appended to: {0} ({1} record(s))", opt.BackupTo, records.Count);
         }
     }
 
