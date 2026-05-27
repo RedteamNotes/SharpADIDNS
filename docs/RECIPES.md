@@ -1,5 +1,7 @@
 # Recipes
 
+**Language**: **English** | [中文](RECIPES.zh-CN.md) | [Français](RECIPES.fr.md)
+
 End-to-end scenarios. Each recipe is self-contained — you can skip to the one you need without reading the others.
 
 Every recipe uses the [`--c2` mode](../README.md#using-via-sliver-execute-assembly) as the default invocation shape because the primary deployment is Sliver `execute-assembly`. To run any of these on a local shell instead, drop `--c2` and replace `--password-base64` with `--password` (and accept the cleartext warning).
