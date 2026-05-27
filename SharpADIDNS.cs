@@ -72,20 +72,6 @@ namespace SharpADIDNS
                     return ExitCodes.Success;
                 }
 
-                if (string.IsNullOrWhiteSpace(opt.Action))
-                {
-                    Logger.Err("No action specified (expected: enum | query | add | disable | remove | list-zones)");
-                    return ExitCodes.UsageError;
-                }
-
-                bool needsZone = opt.Action != "list-zones";
-
-                if (needsZone && string.IsNullOrWhiteSpace(opt.Zone))
-                {
-                    Logger.Err("--zone is required");
-                    return ExitCodes.UsageError;
-                }
-
                 if (string.IsNullOrWhiteSpace(opt.DomainDn))
                 {
                     Logger.Err("--dn is required");
@@ -97,50 +83,20 @@ namespace SharpADIDNS
                 if (Replication.CheckBeforeAction(opt) != ExitCodes.Success)
                     return ExitCodes.UsageError;
 
-                string zoneDn = needsZone ? LdapOps.BuildZoneDn(opt.Zone, opt.Partition, opt.DomainDn) : null;
-
-                Logger.Verbose(opt, "Action:     {0}", opt.Action);
-                if (zoneDn != null)
-                    Logger.Verbose(opt, "Zone DN:    {0}", zoneDn);
-                if (!string.IsNullOrWhiteSpace(opt.Server))
-                    Logger.Verbose(opt, "LDAP DC:    {0}", opt.Server);
-                if (!string.IsNullOrWhiteSpace(opt.Username))
-                    Logger.Verbose(opt, "Bind user:  {0}", opt.Username);
-                Logger.Verbose(opt, "Transport:  {0}", opt.Ldaps ? "LDAPS (port 636)" : "LDAP (port 389)");
-
-                switch (opt.Action)
+                // Script mode: one execute-assembly invocation runs multiple
+                // actions. Outer flags become defaults; each statement can
+                // override. Outer must not also specify a top-level action.
+                if (!string.IsNullOrEmpty(opt.Script))
                 {
-                    case "enum":
-                        return Actions.RunEnum(opt, zoneDn);
-
-                    case "query":
-                        if (RequireName(opt) != 0) return ExitCodes.UsageError;
-                        return Actions.RunQuery(opt, zoneDn);
-
-                    case "list-zones":
-                        return Actions.RunListZones(opt);
-
-                    case "add":
-                        if (RequireName(opt) != 0) return ExitCodes.UsageError;
-                        if (string.IsNullOrWhiteSpace(opt.Data) && string.IsNullOrWhiteSpace(opt.RawBase64))
-                        {
-                            Logger.Err("add requires --data <value> or --raw <base64>");
-                            return ExitCodes.UsageError;
-                        }
-                        return Actions.RunAdd(opt, zoneDn);
-
-                    case "disable":
-                        if (RequireName(opt) != 0) return ExitCodes.UsageError;
-                        return Actions.RunDisable(opt, zoneDn);
-
-                    case "remove":
-                        if (RequireName(opt) != 0) return ExitCodes.UsageError;
-                        return Actions.RunRemove(opt, zoneDn);
-
-                    default:
-                        Logger.Err("Unknown action: {0}", opt.Action);
+                    if (!string.IsNullOrEmpty(opt.Action))
+                    {
+                        Logger.Err("--script is incompatible with a top-level action verb");
                         return ExitCodes.UsageError;
+                    }
+                    return RunScript(opt);
                 }
+
+                return DispatchAction(opt);
             }
             catch (DirectoryServicesCOMException ex)
             {
@@ -174,6 +130,154 @@ namespace SharpADIDNS
                 return 1;
             }
             return 0;
+        }
+
+        private static int DispatchAction(Options opt)
+        {
+            if (string.IsNullOrWhiteSpace(opt.Action))
+            {
+                Logger.Err("No action specified (expected: enum | query | add | disable | remove | list-zones)");
+                return ExitCodes.UsageError;
+            }
+
+            bool needsZone = opt.Action != "list-zones";
+
+            if (needsZone && string.IsNullOrWhiteSpace(opt.Zone))
+            {
+                Logger.Err("--zone is required");
+                return ExitCodes.UsageError;
+            }
+
+            string zoneDn = needsZone ? LdapOps.BuildZoneDn(opt.Zone, opt.Partition, opt.DomainDn) : null;
+
+            Logger.Verbose(opt, "Action:     {0}", opt.Action);
+            if (zoneDn != null)
+                Logger.Verbose(opt, "Zone DN:    {0}", zoneDn);
+            if (!string.IsNullOrWhiteSpace(opt.Server))
+                Logger.Verbose(opt, "LDAP DC:    {0}", opt.Server);
+            if (!string.IsNullOrWhiteSpace(opt.Username))
+                Logger.Verbose(opt, "Bind user:  {0}", opt.Username);
+            Logger.Verbose(opt, "Transport:  {0}", opt.Ldaps ? "LDAPS (port 636)" : "LDAP (port 389)");
+
+            switch (opt.Action)
+            {
+                case "enum":
+                    return Actions.RunEnum(opt, zoneDn);
+
+                case "query":
+                    if (RequireName(opt) != 0) return ExitCodes.UsageError;
+                    return Actions.RunQuery(opt, zoneDn);
+
+                case "list-zones":
+                    return Actions.RunListZones(opt);
+
+                case "add":
+                    if (RequireName(opt) != 0) return ExitCodes.UsageError;
+                    if (string.IsNullOrWhiteSpace(opt.Data) && string.IsNullOrWhiteSpace(opt.RawBase64))
+                    {
+                        Logger.Err("add requires --data <value> or --raw <base64>");
+                        return ExitCodes.UsageError;
+                    }
+                    return Actions.RunAdd(opt, zoneDn);
+
+                case "disable":
+                    if (RequireName(opt) != 0) return ExitCodes.UsageError;
+                    return Actions.RunDisable(opt, zoneDn);
+
+                case "remove":
+                    if (RequireName(opt) != 0) return ExitCodes.UsageError;
+                    return Actions.RunRemove(opt, zoneDn);
+
+                default:
+                    Logger.Err("Unknown action: {0}", opt.Action);
+                    return ExitCodes.UsageError;
+            }
+        }
+
+        private static int RunScript(Options outerOpt)
+        {
+            string[] rawStmts = outerOpt.Script.Split(';');
+            int total = 0, succeeded = 0, failed = 0;
+            bool halt = outerOpt.ScriptOnError == "halt";
+
+            foreach (string raw in rawStmts)
+            {
+                string stmt = raw.Trim();
+                if (stmt.Length == 0) continue;
+                total++;
+
+                string[] tokens = stmt.Split(
+                    new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+
+                Options stmtOpt = outerOpt.Clone();
+                ResetActionScopedFields(stmtOpt);
+
+                try
+                {
+                    Options.ApplyArgs(stmtOpt, tokens);
+                    int rc = DispatchAction(stmtOpt);
+                    if (rc == ExitCodes.Success)
+                    {
+                        succeeded++;
+                    }
+                    else
+                    {
+                        failed++;
+                        Logger.Err("Statement {0} failed with exit code {1}: {2}", total, rc, stmt);
+                        if (halt) break;
+                    }
+                }
+                catch (DirectoryServicesCOMException ex)
+                {
+                    failed++;
+                    ErrorReporter.PrintCom(ex);
+                    if (halt) break;
+                }
+                catch (ArgumentException ex)
+                {
+                    failed++;
+                    Logger.Err("Statement {0}: {1}", total, ex.Message);
+                    if (halt) break;
+                }
+            }
+
+            if (outerOpt.Format == "json")
+            {
+                Console.WriteLine(
+                    "{\"_type\":\"script_summary\",\"total\":" + total +
+                    ",\"succeeded\":" + succeeded +
+                    ",\"failed\":" + failed +
+                    ",\"on_error\":\"" + outerOpt.ScriptOnError + "\"}");
+            }
+            else
+            {
+                Logger.Ok("Script: {0}/{1} succeeded, {2} failed (on-error: {3})",
+                    succeeded, total, failed, outerOpt.ScriptOnError);
+            }
+
+            return failed == 0 ? ExitCodes.Success : ExitCodes.LdapError;
+        }
+
+        private static void ResetActionScopedFields(Options o)
+        {
+            o.Action       = null;
+            o.Name         = null;
+            o.Data         = null;
+            o.RawBase64    = null;
+            o.Force        = false;
+            o.Append       = false;
+            o.MimicAging   = false;
+            o.SetOwner     = null;
+            o.RecordType   = "A";
+            o.SrvPriority  = 0;
+            o.SrvWeight    = 0;
+            o.SrvPort      = -1;
+            o.MxPref       = 10;
+            o.FilterType   = null;
+            o.FilterName   = null;
+            o.OnlyTombstoned = false;
+            o.NoTombstoned = false;
+            o.Script       = null;
         }
     }
 
@@ -2099,6 +2203,11 @@ namespace SharpADIDNS
         public bool   ShowHelp;
         public bool   ShowVersion;
 
+        public Options Clone()
+        {
+            return (Options)this.MemberwiseClone();
+        }
+
         // Targeting
         public string Zone;
         public string Name;
@@ -2143,6 +2252,8 @@ namespace SharpADIDNS
         public bool   RequirePdc;
         public bool   ShowPdc;
         public bool   C2;
+        public string Script;
+        public string ScriptOnError = "halt";
 
         // Enum filters
         public string FilterType;
@@ -2160,6 +2271,12 @@ namespace SharpADIDNS
             args = ExpandArgfiles(args);
 
             Options o = new Options();
+            ApplyArgs(o, args);
+            return o;
+        }
+
+        internal static void ApplyArgs(Options o, string[] args)
+        {
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -2227,6 +2344,14 @@ namespace SharpADIDNS
                 else if (a == "--require-pdc")                      o.RequirePdc = true;
                 else if (a == "--show-pdc")                         o.ShowPdc    = true;
                 else if (a == "--c2")                               o.C2         = true;
+                else if (a == "--script" && i + 1 < args.Length)    o.Script     = args[++i];
+                else if (a == "--script-on-error" && i + 1 < args.Length)
+                {
+                    string mode = args[++i].ToLowerInvariant();
+                    if (mode != "halt" && mode != "continue")
+                        throw new ArgumentException("--script-on-error must be 'halt' or 'continue'");
+                    o.ScriptOnError = mode;
+                }
                 else if (a == "--filter-type" && i + 1 < args.Length) o.FilterType = args[++i];
                 else if (a == "--filter-name" && i + 1 < args.Length) o.FilterName = args[++i];
                 else if (a == "--only-tombstoned")                  o.OnlyTombstoned = true;
@@ -2236,7 +2361,6 @@ namespace SharpADIDNS
             }
 
             // Password resolution happens after Parse via Credentials.Resolve(opt) -- see Program.Main.
-            return o;
         }
 
         private static int ParseUint16Arg(string name, string raw)
@@ -2404,6 +2528,11 @@ namespace SharpADIDNS
             Console.WriteLine("                           --backup-to -               (stdout, no disk)");
             Console.WriteLine("                         Pair with --password-base64 <b64> for clean");
             Console.WriteLine("                         credential transport across shell layers.");
+            Console.WriteLine("  --script \"stmt; stmt\"  Run multiple actions in one invocation. Statements");
+            Console.WriteLine("                         are ';' separated; each is action+flags (overrides");
+            Console.WriteLine("                         outer flags). Outer must not also specify an action.");
+            Console.WriteLine("                         Saves N-1 sacrificial-process spawns / EID 1 events.");
+            Console.WriteLine("  --script-on-error <m>  halt | continue   (default: halt)");
             Console.WriteLine("  --dry-run              Show what would change; do not write to AD");
             Console.WriteLine("  --backup-to <file|->   Append a JSON line per affected node before");
             Console.WriteLine("                         modifying it. Use '-' to write to stdout instead");
