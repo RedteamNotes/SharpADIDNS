@@ -25,6 +25,8 @@ internal sealed class TestRunner
         Run("BuildSrv round-trip",                  TestBuildSrv);
         Run("BuildMx round-trip",                   TestBuildMx);
         Run("BuildTombstone format",                TestBuildTombstone);
+        Run("AgingTimestampNow plausible",          TestAgingTimestampNow);
+        Run("BuildA with mimic-aging timestamp",    TestBuildWithTimestamp);
         Run("DNS_COUNT_NAME 63-byte label",         TestCountName63);
         Run("DNS_COUNT_NAME multi-label",           TestCountNameMulti);
         Run("DNS_COUNT_NAME empty/oversize reject", TestCountNameRejected);
@@ -225,6 +227,32 @@ internal sealed class TestRunner
         DateTime dt = DateTime.FromFileTimeUtc((long)ft);
         double secs = Math.Abs((DateTime.UtcNow - dt).TotalSeconds);
         if (secs > 30.0) throw new Exception("FILETIME diff too large: " + secs + "s");
+    }
+
+    private static void TestAgingTimestampNow()
+    {
+        uint ts = DnsRecord.AgingTimestampNow();
+        // Year 2026 ≈ (2026-1601)*365.25*24 ≈ 3,725,000 hours
+        // Year 2200 ≈ ~5,250,000 hours
+        if (ts < 3500000 || ts > 8000000)
+            throw new Exception("AgingTimestampNow out of plausible range for this century: " + ts);
+    }
+
+    private static void TestBuildWithTimestamp()
+    {
+        // With timestamp == 0 (default), header at offset 20 is zeroed.
+        byte[] r0 = DnsRecord.BuildA(IPAddress.Parse("1.2.3.4"), 600);
+        AssertEq(0u, Bin.ReadU32Le(r0, 20), "default timestamp = 0");
+
+        // With explicit non-zero timestamp, it should be encoded LE at offset 20.
+        byte[] r1 = DnsRecord.BuildA(IPAddress.Parse("1.2.3.4"), 600, 0xCAFE1234u);
+        AssertEq(0xCAFE1234u, Bin.ReadU32Le(r1, 20), "explicit timestamp round-trip");
+
+        // SRV with mimic-aging propagates the timestamp into the header (not into
+        // the type-specific data, which lives at offsets >=24).
+        byte[] r2 = DnsRecord.BuildSrv(0, 0, 389, "t.example", 600, 0xABCDEF00u);
+        AssertEq(0xABCDEF00u, Bin.ReadU32Le(r2, 20), "SRV timestamp at offset 20");
+        AssertEq((ushort)389, Bin.ReadU16Be(r2, 28), "SRV port not displaced by timestamp");
     }
 
     private static void TestCountName63()
