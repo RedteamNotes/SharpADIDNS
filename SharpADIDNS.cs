@@ -30,6 +30,12 @@ namespace SharpADIDNS
     {
         public const string Version = "0.5.0";
 
+        // Unique per process. All structured (JSON) output lines from this
+        // invocation carry the same correlation_id, so an operator
+        // collecting receipts from --script / Sliver execute-assembly can
+        // group them together downstream.
+        public static readonly string CorrelationId = Guid.NewGuid().ToString("D");
+
         private static int Main(string[] args)
         {
             try
@@ -263,7 +269,8 @@ namespace SharpADIDNS
             if (outerOpt.Format == "json")
             {
                 Console.WriteLine(
-                    "{\"_type\":\"script_summary\",\"total\":" + total +
+                    "{\"correlation_id\":\"" + Program.CorrelationId + "\"," +
+                    "\"_type\":\"script_summary\",\"total\":" + total +
                     ",\"succeeded\":" + succeeded +
                     ",\"failed\":" + failed +
                     ",\"on_error\":\"" + outerOpt.ScriptOnError + "\"}");
@@ -952,7 +959,10 @@ namespace SharpADIDNS
             if (jsonMode)
             {
                 json = new StringBuilder();
-                json.Append("{\"zones\":[");
+                json.Append("{");
+                json.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
+                json.Append("\"action\":\"list-zones\",");
+                json.Append("\"zones\":[");
             }
 
             foreach (string partition in partitions)
@@ -1084,7 +1094,10 @@ namespace SharpADIDNS
                     if (jsonMode)
                     {
                         json = new StringBuilder();
-                        json.Append("{\"zone_dn\":\"").Append(Json.Escape(zoneDn)).Append("\",");
+                        json.Append("{");
+                        json.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
+                        json.Append("\"action\":\"enum\",");
+                        json.Append("\"zone_dn\":\"").Append(Json.Escape(zoneDn)).Append("\",");
                         json.Append("\"nodes\":[");
                     }
 
@@ -1263,6 +1276,8 @@ namespace SharpADIDNS
         {
             StringBuilder json = new StringBuilder();
             json.Append("{");
+            json.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
+            json.AppendFormat("\"action\":\"query\",");
             json.AppendFormat("\"dn\":\"{0}\",", Json.Escape(nodeDn));
             json.AppendFormat("\"name\":\"{0}\",", Json.Escape(PropOne(node, "name")));
             json.AppendFormat("\"dNSTombstoned\":{0},", IsTombstoned(node) ? "true" : "false");
@@ -2031,6 +2046,7 @@ namespace SharpADIDNS
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("{");
+            sb.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
             sb.Append("\"action\":\"add\",");
             sb.Append("\"result\":\"ok\",");
             sb.AppendFormat("\"operation\":\"{0}\",", operation);
@@ -2073,6 +2089,7 @@ namespace SharpADIDNS
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("{");
+            sb.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
             sb.Append("\"action\":\"disable\",");
             sb.Append("\"result\":\"ok\",");
             sb.AppendFormat("\"dn\":\"{0}\",",   Json.Escape(nodeDn));
@@ -2089,6 +2106,7 @@ namespace SharpADIDNS
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("{");
+            sb.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
             sb.Append("\"action\":\"remove\",");
             sb.Append("\"result\":\"ok\",");
             sb.AppendFormat("\"dn\":\"{0}\",",   Json.Escape(nodeDn));
@@ -2854,6 +2872,7 @@ namespace SharpADIDNS
 
             StringBuilder json = new StringBuilder();
             json.Append("{");
+            json.AppendFormat("\"correlation_id\":\"{0}\",", Program.CorrelationId);
             json.Append("\"_type\":\"backup\",");
             json.Append("\"timestamp\":\"").Append(DateTime.UtcNow.ToString("o")).Append("\",");
             json.Append("\"action\":\"").Append(Json.Escape(action)).Append("\",");

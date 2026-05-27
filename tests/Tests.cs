@@ -31,6 +31,7 @@ internal sealed class TestRunner
         Run("DNS_COUNT_NAME multi-label",           TestCountNameMulti);
         Run("DNS_COUNT_NAME empty/oversize reject", TestCountNameRejected);
         Run("Json.Escape control chars",            TestJsonEscape);
+        Run("Program.CorrelationId is GUID-shaped", TestCorrelationIdShape);
 
         Console.WriteLine();
         if (failed == 0)
@@ -277,6 +278,23 @@ internal sealed class TestRunner
         AssertThrows<ArgumentException>(
             delegate { DnsRecord.BuildCname(new string('a', 64), 600); },
             "64-byte label too long");
+    }
+
+    private static void TestCorrelationIdShape()
+    {
+        string id = Program.CorrelationId;
+        if (id == null || id.Length != 36)
+            throw new Exception("not 36 chars: '" + id + "'");
+        string[] parts = id.Split('-');
+        if (parts.Length != 5)
+            throw new Exception("not 5 dash-separated groups: '" + id + "'");
+        int[] expected = { 8, 4, 4, 4, 12 };
+        for (int i = 0; i < 5; i++)
+            if (parts[i].Length != expected[i])
+                throw new Exception("group " + i + " has length " + parts[i].Length +
+                                    ", expected " + expected[i] + ": '" + id + "'");
+        if (id != Program.CorrelationId)
+            throw new Exception("CorrelationId not stable across reads");
     }
 
     private static void TestJsonEscape()

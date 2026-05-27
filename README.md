@@ -388,13 +388,14 @@ Receipt schema:
 
 ```json
 {
+  "correlation_id": "uuid-shared-by-all-receipts-from-this-invocation",
   "action":         "add" | "disable" | "remove",
   "result":         "ok",
   "operation":      "create" | "replace" | "append",   // add only
   "dn":             "DC=sccm,DC=...",
   "zone":           "redteamnotes.local",
   "name":           "sccm",
-  "record":         { "type":"A", "type_id":1, "ttl":600, "ipv4":"10.0.0.66", "blob_base64":"..." },
+  "record":         { "type":"A", "type_id":1, "ttl":600, "timestamp":3727482, "ipv4":"10.0.0.66", "blob_base64":"..." },
   "previous_state": null | {
     "tombstoned":     false,
     "records_base64": ["...", "..."]
