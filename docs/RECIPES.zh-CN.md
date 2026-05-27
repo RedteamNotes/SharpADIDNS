@@ -29,9 +29,9 @@
 
 ---
 
-## 1. AD-DNS 环境梳理
+## 1. ADIDNS 环境梳理
 
-**运维 / 实验视角**：在写之前先摸清 AD-DNS 环境。盘点 zone、注意值得关注的主机名、所有者模式。只读 — 不写 AD，不留磁盘痕迹。
+**运维 / 实验视角**：在写之前先摸清 ADIDNS 环境。盘点 zone、注意值得关注的主机名、所有者模式。只读 — 不写 AD，不留磁盘痕迹。
 
 ```bash
 sliver > execute-assembly SharpADIDNS.exe -p dllhost.exe -- \
