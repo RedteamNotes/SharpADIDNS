@@ -28,7 +28,7 @@ namespace SharpADIDNS
     // -----------------------------------------------------------------------
     internal static class Program
     {
-        public const string Version = "0.5.81";
+        public const string Version = "0.5.9";
 
         // Unique per process. All structured (JSON) output lines from this
         // invocation carry the same correlation_id, so an operator
