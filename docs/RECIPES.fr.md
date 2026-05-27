@@ -7,7 +7,7 @@ Scénarios de laboratoire autour de SharpADIDNS. Chaque recette est décrite sou
 - **Perspective opérationnelle / laboratoire** — comment reproduire un comportement d'écriture ou de lecture ADIDNS dans un environnement contrôlé ;
 - **Perspective défensive** — ce que l'équipe bleue / le SOC peut observer, les alertes, signatures de logs et angles morts de monitoring correspondants.
 
-Chaque recette est autonome — vous pouvez sauter directement à celle dont vous avez besoin. Par défaut on utilise le [mode `--c2`](../README.fr.md#utilisation-via-sliver-execute-assembly) comme forme d'invocation, car l'un des principaux chemins de déploiement est Sliver `execute-assembly`. Pour exécuter en shell local, retirez `--c2` et remplacez `--password-base64` par `--password` (en acceptant l'avertissement cleartext).
+Chaque recette est autonome — vous pouvez sauter directement à celle dont vous avez besoin. Par défaut on utilise le [mode `--c2`](README.fr.md#utilisation-via-sliver-execute-assembly) comme forme d'invocation, car l'un des principaux chemins de déploiement est Sliver `execute-assembly`. Pour exécuter en shell local, retirez `--c2` et remplacez `--password-base64` par `--password` (en acceptant l'avertissement cleartext).
 
 ## Variables utilisées dans toutes les recettes
 
@@ -399,4 +399,4 @@ Ceux-ci s'appliquent à toutes les recettes, pas seulement une :
 - **Le champ `reverse` est un best-effort une-ligne**. Pour replace / append / disable / remove, `reverse` vaut `null` et vous devez reconstruire depuis `previous_state.records_base64`. Ne comptez pas que sur `reverse` — gardez le reçu complet.
 - **Le baseline défensif** : les sections « Perspective défensive » ne sont pas exhaustives — un SOC déployé en vrai dispose en plus d'EDR endpoint, de DPI réseau, de logs de requêtes DNS, de métadonnées de réplication AD, etc. Toute opération ADIDNS doit présumer **qu'au moins une source de données la voit**.
 
-Pour le modèle de visibilité d'audit plus large, voir [`Visibilité d'audit`](../README.fr.md#visibilité-daudit) dans le README principal.
+Pour le modèle de visibilité d'audit plus large, voir [`Visibilité d'audit`](README.fr.md#visibilité-daudit) dans le README principal.

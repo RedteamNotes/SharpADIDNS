@@ -1,8 +1,8 @@
 # SharpADIDNS
 
-**Langues** : [English](README.md) | [中文](README.zh-CN.md) | **Français**
+**Langues** : [English](../README.md) | [中文](README.zh-CN.md) | **Français**
 
-<img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
+<img align="right" src="../assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
 
 <p>
 Outil CLI en C# pour lire et modifier les enregistrements DNS intégrés à AD via LDAP, destiné aux travaux d'administration et de recherche autour d'AD-DNS ; un certain nombre d'adaptations d'ingénierie ont été faites pour les scénarios de chargement .NET à distance (par exemple via Sliver <code>execute-assembly</code>).
@@ -24,7 +24,7 @@ Construit sur <code>System.DirectoryServices</code>, cible .NET Framework 4.x, p
 
 <br clear="right">
 
-<img align="right" src="assets/SharpADIDNS-SS-Alpha.png" alt="SharpADIDNS ScreenShot" width="100%">
+<img align="right" src="../assets/SharpADIDNS-SS-Alpha.png" alt="SharpADIDNS ScreenShot" width="100%">
 
 <br clear="right">
 
@@ -59,7 +59,7 @@ Aucune dépendance tierce.
 
 **Binaire pré-compilé** : téléchargez `SharpADIDNS.exe` depuis la [page Releases](https://github.com/RedteamNotes/SharpADIDNS/releases/latest) (la CI attache un build frais à chaque release taguée). Pour compiler depuis les sources, suivez la commande `csc` ci-dessus. Le dossier `release/` n'est pas versionné.
 
-**Scénarios de bout en bout** : voir [`docs/RECIPES.fr.md`](docs/RECIPES.fr.md) pour des recettes (reconnaissance DNS, ajout d'enregistrement unique avec rollback, écriture à faible empreinte avec `--mimic-aging` + `--set-owner`, écriture wildcard, ajout SRV, opérations batch, nettoyage de fin de mission, vérification DACL préalable). Le README (ce document) couvre les flags ; les recettes couvrent les *flux*.
+**Scénarios de bout en bout** : voir [`RECIPES.fr.md`](RECIPES.fr.md) pour des recettes (reconnaissance DNS, ajout d'enregistrement unique avec rollback, écriture à faible empreinte avec `--mimic-aging` + `--set-owner`, écriture wildcard, ajout SRV, opérations batch, nettoyage de fin de mission, vérification DACL préalable). Le README (ce document) couvre les flags ; les recettes couvrent les *flux*.
 
 ### Tests
 

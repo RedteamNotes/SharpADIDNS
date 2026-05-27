@@ -1,8 +1,8 @@
 # SharpADIDNS
 
-**语言**: [English](README.md) | **中文** | [Français](README.fr.md)
+**语言**: [English](../README.md) | **中文** | [Français](README.fr.md)
 
-<img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
+<img align="right" src="../assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
 
 <p>
 一款用于通过 LDAP 读取和修改微软活动目录集成DNS（ADIDNS）记录的 C# 命令行工具，面向严肃的红队行动构建，并内置一系列专为 Sliver C2 <code>execute-assembly</code> 执行场景定制的技战术功能。
@@ -28,7 +28,7 @@
 
 <br clear="right">
 
-<img align="right" src="assets/SharpADIDNS-SS-Alpha.png" alt="SharpADIDNS ScreenShot" width="100%">
+<img align="right" src="../assets/SharpADIDNS-SS-Alpha.png" alt="SharpADIDNS ScreenShot" width="100%">
 
 <br clear="right">
 
@@ -63,7 +63,7 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 **预编译二进制**：可从 [Releases 页面](https://github.com/RedteamNotes/SharpADIDNS/releases/latest) 下载 `SharpADIDNS.exe`（CI 在每次打 tag 时自动构建并 attach 新版本）。源码编译参见上方 `csc` 命令。`release/` 目录不纳入版本控制。
 
-**端到端场景**：详见 [`docs/RECIPES.zh-CN.md`](docs/RECIPES.zh-CN.md)（环境侦察、单记录写入与回滚、`--mimic-aging` + `--set-owner` 的低噪写入、通配符写入、SRV 追加、批处理、环境收尾、DACL 预检）。本 README 是参考手册（讲"每个 flag 干嘛"），recipes 讲"某种场景的完整流程"。
+**端到端场景**：详见 [`RECIPES.zh-CN.md`](RECIPES.zh-CN.md)（环境侦察、单记录写入与回滚、`--mimic-aging` + `--set-owner` 的低噪写入、通配符写入、SRV 追加、批处理、环境收尾、DACL 预检）。本 README 是参考手册（讲"每个 flag 干嘛"），recipes 讲"某种场景的完整流程"。
 
 ### 测试
 

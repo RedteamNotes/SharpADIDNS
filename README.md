@@ -1,6 +1,6 @@
 # SharpADIDNS
 
-**Language**: **English** | [中文](README.zh-CN.md) | [Français](README.fr.md)
+**Language**: **English** | [中文](docs/README.zh-CN.md) | [Français](docs/README.fr.md)
 
 <img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
 

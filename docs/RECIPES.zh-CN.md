@@ -11,7 +11,7 @@
 - **运维 / 实验视角** — 在受控的实验环境中如何复现某种 ADIDNS 写入或读取行为；
 - **防御视角** — 蓝队 / SOC 侧能观察到什么，对应的告警、日志特征与监控盲点。
 
-每个 recipe 自成一体 — 不用看其他几个就能直接跳到所需的那一个。默认使用 [`--c2` 模式](../README.zh-CN.md#通过-sliver-execute-assembly-使用) 作为调用形态，因为主部署路径之一是 Sliver `execute-assembly`。如要改在本地 shell 跑，去掉 `--c2`，把 `--password-base64` 换成 `--password`（并接受 cleartext 告警）。
+每个 recipe 自成一体 — 不用看其他几个就能直接跳到所需的那一个。默认使用 [`--c2` 模式](README.zh-CN.md#通过-sliver-execute-assembly-使用) 作为调用形态，因为主部署路径之一是 Sliver `execute-assembly`。如要改在本地 shell 跑，去掉 `--c2`，把 `--password-base64` 换成 `--password`（并接受 cleartext 告警）。
 
 ## 全部 recipe 共用的变量
 
@@ -403,4 +403,4 @@ sliver > execute-assembly SharpADIDNS.exe -p dllhost.exe -- \
 - **`reverse` 字段是 best-effort 单行式**。replace / append / disable / remove 场景下 `reverse` 为 `null`，你必须从 `previous_state.records_base64` 重建。别只靠 `reverse` — 保留完整 receipt。
 - **防御视角的可见性是底线**：本文档的 "防御视角" 段落不是穷举 — 真实 SOC 部署里还有 endpoint EDR、network DPI、DNS query log、AD replication metadata 等多种数据源；任何 ADIDNS 操作都应假定**至少有一种数据源能看到**。
 
-完整的审计可见性模型参见主 README 的 [`审计可见性`](../README.zh-CN.md#审计可见性) 章节。
+完整的审计可见性模型参见主 README 的 [`审计可见性`](README.zh-CN.md#审计可见性) 章节。
