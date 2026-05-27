@@ -4,6 +4,17 @@ All notable changes to this project. Format roughly follows [Keep a Changelog](h
 
 Each release also has detailed notes attached on the [Releases page](https://github.com/RedteamNotes/SharpADIDNS/releases).
 
+## [0.5.41] - 2026-05-27
+
+Documentation + invocation-layout polish. No CLI / behavioral change.
+
+### Fixed
+- Two `corp\<word>` residues that escaped the v0.5.4 corp.local revert (the earlier `replace_all` only covered `corp.local` / `DC=corp,` / `corp\\u` patterns): `'corp\DnsAdmins'` in `SharpADIDNS.cs` EXAMPLES and `corp\u` in `docs/RECIPES.md`. `grep -RE 'corp\\|corp\.local' .` now returns 0 matches.
+
+### Changed
+- Sliver invocation layout unified across the project: every example now uses `execute-assembly -p <proc> SharpADIDNS.exe -- [SharpADIDNS args]`. The `--` is Sliver's standard convention for delimiting assembly args from Sliver's own flags; explicit `--` removes ambiguity when assembly args start with `-` and visually separates Sliver-level from SharpADIDNS-level args. Applied to `SharpADIDNS.cs` `--help` EXAMPLES (one place), `README.md` Sliver code blocks (3 places), `docs/RECIPES.md` recipe invocations (~10 places). Local-only `--help` examples without Sliver context unchanged.
+- `--help` EXAMPLES Sliver C2 example also restructured: includes the `execute-assembly` prefix (was bare `SharpADIDNS.exe`) and puts the `add` verb on its own line with its flags indented, so the visual structure mirrors the logical Sliver / SharpADIDNS / action / action-args layers.
+
 ## [0.5.4] - 2026-05-27
 
 Audit-grade polish: stdout discipline, JSON dry-run, per-verb help, correlation_id.
@@ -133,6 +144,7 @@ Tier 1: "safe to use in serious engagements" threshold reached.
 - Distinct exit codes (0 / 1 / 2 / 3 / 4) for scripting.
 - Single-file .NET Framework 4.x executable, no third-party dependencies, built with the in-box `csc.exe`.
 
+[0.5.41]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.41
 [0.5.4]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.4
 [0.5.0]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.0
 [0.4.0]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.4.0
