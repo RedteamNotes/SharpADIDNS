@@ -59,6 +59,7 @@ namespace SharpADIDNS
                 Logger.ColorEnabled = opt.NoColor ? false :
                                       opt.Color ? true :
                                       !Console.IsOutputRedirected;
+                Logger.JsonMode = opt.Format == "json";
 
                 if (opt.ShowVersion)
                 {
@@ -287,6 +288,7 @@ namespace SharpADIDNS
     internal static class Logger
     {
         public static bool ColorEnabled = false;
+        public static bool JsonMode     = false;
 
         private const string Reset    = "[0m";
         private const string FgGreen  = "[32m";
@@ -300,21 +302,28 @@ namespace SharpADIDNS
             return ColorEnabled ? ansi + text + Reset : text;
         }
 
+        // In JSON mode, route stdout-leaning lines (Info/Ok/Verbose) to stderr
+        // so stdout is purely the structured JSON receipt stream.
+        private static TextWriter Out()
+        {
+            return JsonMode ? Console.Error : Console.Out;
+        }
+
         public static void Info(Options opt, string fmt, params object[] args)
         {
             if (opt != null && opt.Quiet) return;
-            Console.WriteLine(Mark(FgCyan, "[*]") + " " + fmt, args);
+            Out().WriteLine(Mark(FgCyan, "[*]") + " " + fmt, args);
         }
 
         public static void Ok(string fmt, params object[] args)
         {
-            Console.WriteLine(Mark(FgGreen, "[+]") + " " + fmt, args);
+            Out().WriteLine(Mark(FgGreen, "[+]") + " " + fmt, args);
         }
 
         public static void Verbose(Options opt, string fmt, params object[] args)
         {
             if (opt == null || !opt.Verbose) return;
-            Console.WriteLine(Mark(FgGray, "[v]") + " " + fmt, args);
+            Out().WriteLine(Mark(FgGray, "[v]") + " " + fmt, args);
         }
 
         public static void Warn(string fmt, params object[] args)
