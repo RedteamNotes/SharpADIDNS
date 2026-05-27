@@ -3,7 +3,7 @@
 A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, built for serious red teaming and packed with tradecraft features tailored for Sliver C2 execute-assembly.
 
 <p align="center">
-  <img src="assets/SharpADIDNS-logo.png" alt="SharpADIDNS Logo" width="520">
+  <img src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="520">
 </p>
 
 <h1 align="center">SharpADIDNS</h1>
