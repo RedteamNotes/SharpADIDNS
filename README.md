@@ -116,7 +116,7 @@ Restore from a backup file: pipe a relevant base64 blob into `add --raw <base64>
 
 | Option | Description |
 | ------ | ----------- |
-| `--filter-type <T,...>` | Comma list of types. Shows nodes that have **at least one** record of these types. Accepted: `A`, `AAAA`, `CNAME`, `PTR`, `SRV`, `MX`, `TXT`, `NS`, `SOA`, `TS` (tombstone). |
+| `--filter-type <T,...>` | Comma list of types, or repeated (`--filter-type A --filter-type AAAA` is equivalent to `--filter-type A,AAAA`). Shows nodes that have **at least one** record of these types. Accepted: `A`, `AAAA`, `CNAME`, `PTR`, `SRV`, `MX`, `TXT`, `NS`, `SOA`, `TS` (tombstone). |
 | `--filter-name <glob>`  | Match the node name (case-insensitive). `*` and `?` wildcards. Examples: `sql*`, `_*._tcp.*`, `?pad`. |
 | `--only-tombstoned`     | Show only tombstoned nodes. |
 | `--no-tombstoned`       | Hide tombstoned nodes (active only). |
@@ -149,6 +149,14 @@ Any argument starting with `@` is treated as a path to a text file whose content
 SharpADIDNS.exe enum @common.args
 SharpADIDNS.exe query @common.args --name sccm
 ```
+
+### Flag syntax
+
+Both `--flag value` (space) and `--flag=value` (equals) are accepted. The equals form splits at the first `=`, so values containing `=` (base64 padding `==`, DN strings like `DC=redteamnotes,DC=local`) are preserved. Useful when passing args through multiple shell-parsing layers (e.g. Sliver `execute-assembly`) where space handling is fragile.
+
+### Per-verb help
+
+`SharpADIDNS.exe <verb> --help` (e.g. `add --help`, `enum --help`) prints a verb-specific USAGE line and only the sections relevant to that verb (e.g. `add` shows RECORD DATA; `enum` shows ENUM FILTERS; `list-zones` shows neither). Plain `--help` (no verb) prints the full reference.
 
 ### Exit codes
 
@@ -390,7 +398,7 @@ Receipt schema:
 {
   "correlation_id": "uuid-shared-by-all-receipts-from-this-invocation",
   "action":         "add" | "disable" | "remove",
-  "result":         "ok",
+  "result":         "ok" | "would_do",   // "would_do" under --dry-run
   "operation":      "create" | "replace" | "append",   // add only
   "dn":             "DC=sccm,DC=...",
   "zone":           "redteamnotes.local",
@@ -406,6 +414,8 @@ Receipt schema:
 
 - `previous_state` is `null` for `add` creating a brand-new node, populated otherwise.
 - `reverse` is a one-line undo when expressible as a single command (only `add` create). For replace / append / disable / remove, the undo is multi-step (one `add --raw <b64> --force` per entry in `previous_state.records_base64`); `reverse` is `null` and the operator iterates.
+- Under `--dry-run`, the same schema is emitted but with `result: "would_do"` and `set_owner` omitted (no SetOwner ran). Useful for previewing a write without committing.
+- `correlation_id` is identical across every JSON line produced by one process invocation (action receipts, dry-run receipts, `query`/`enum`/`list-zones` output, `script_summary`, backup lines). Group by it for downstream log aggregation.
 
 ### Restoring from a receipt
 
@@ -476,7 +486,7 @@ Stdout contains one receipt JSON line per statement (in order), plus a final sum
 
 **Why this matters for OPSEC**: each `execute-assembly` spawns a sacrificial process (Sysmon EID 1) and loads the CLR (.NET ETW chatter). N actions run as N separate `execute-assembly` calls cost N spawns; the same N actions run via `--script` cost **one** spawn. Less process noise to correlate, fewer process trees to investigate.
 
-`--script-on-error halt` (default) stops on the first failure. `--script-on-error continue` keeps running and reports the totals in the summary.
+`--script-on-error halt` (default) stops on the first failure. `--script-on-error continue` (or its alias `--continue-on-error`) keeps running and reports the totals in the summary.
 
 Action-scoped flags (`--name`, `--data`, `--raw`, `--force`, `--append`, `--mimic-aging`, `--set-owner`, `--type`, `--srv-*`, `--mx-pref`, `--filter-*`, `--only-tombstoned`, `--no-tombstoned`) are reset per statement -- they don't bleed between statements. Targeting and auth flags (`--zone`, `--dn`, `--server`, `--username`, `--password*`, `--ldaps`, `--partition`) are inherited from outer and can be overridden per statement.
 
