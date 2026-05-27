@@ -1,7 +1,5 @@
-# Claude Code session state
-.claude/
-
-# Build artifacts
+.idea/
+.vscode/
 *.pdb
 *.obj
 *.suo
@@ -11,7 +9,4 @@ bin/
 obj/
 release/
 tests/Tests.exe
-
-# IDE
-.idea/
-.vscode/
+.claude/
