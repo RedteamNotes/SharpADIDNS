@@ -5,7 +5,7 @@
 <img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
 
 <p>
-基于 LDAP 读取与修改 AD 集成 DNS 记录的 C# 命令行工具，面向 ADIDNS 的运维与研究场景；针对远程 .NET 装载（如 Sliver <code>execute-assembly</code>）的部署方式做了一系列工程化适配。
+一款用于通过 LDAP 读取和修改微软活动目录集成DNS（ADIDNS）记录的 C# 命令行工具，面向严肃的红队行动构建，并内置一系列专为 Sliver C2 <code>execute-assembly</code> 执行场景定制的技战术功能。
 </p>
 
 <p>
@@ -15,11 +15,11 @@
 </p>
 
 <p>
-围绕真实运维场景设计：原生支持远程 .NET 装载模式 <code>--c2</code>；带结构化 <code>--backup-to</code> 回滚的 <code>--dry-run</code> 预演；批处理 <code>--script</code>；带跨调用 <code>correlation_id</code> 的 JSON receipt；可控的写入指纹 — <code>--mimic-aging</code> 控制 <code>Timestamp</code> 字段，<code>--set-owner</code> 显式指定对象所有者，<code>--require-pdc</code> 阻止误写非 PDC 副本。
+面向严肃红队使用场景构建：原生支持 Sliver <code>execute-assembly</code> 模式 <code>--c2</code>；支持 <code>--dry-run</code> 预执行检查，并配合结构化 <code>--backup-to</code> 回滚备份；支持批量脚本执行 <code>--script</code>；支持带跨次调用 <code>correlation_id</code> 的 JSON 回执；并提供主动指纹缓解能力。<code>--mimic-aging</code> 可规避 <code>Timestamp=0</code> 这一 IOC，<code>--set-owner</code> 可伪装对象所有权，<code>--require-pdc</code> 可确保写入操作不会落到非 PDC 副本上。
 </p>
 
 <p>
-基于 <code>System.DirectoryServices</code>，面向 .NET Framework 4.x，编译为一个独立的小 <code>.exe</code>。仅供授权研究、实验环境与运维测试使用。
+基于 <code>System.DirectoryServices</code> 构建，目标运行环境为 .NET Framework 4.x，并生成体积较小的独立 <code>.exe</code> 文件。适用于经授权的红队行动、渗透测试项目以及实验室研究场景。
 </p>
 
 <br clear="right">
@@ -28,7 +28,7 @@
 
 <br clear="right">
 
-## 能力
+## 主要功能
 
 | 动作  | 说明 |
 | ------- | ----------- |
