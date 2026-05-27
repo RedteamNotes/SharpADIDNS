@@ -2,6 +2,10 @@
 
 **语言**: [English](RECIPES.md) | **中文** | [Français](RECIPES.fr.md)
 
+<p>
+:star: 强烈建议阅读英语版本，表意更准确，Github审计策略更宽松。:star:
+</p>
+
 围绕 SharpADIDNS 的 lab 实验场景集。每个 recipe 从两个视角描述：
 
 - **运维 / 实验视角** — 在受控的实验环境中如何复现某种 ADIDNS 写入或读取行为；
