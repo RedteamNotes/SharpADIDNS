@@ -539,12 +539,6 @@ Type-specific data:
   cchNameLength (17 = label data including trailing 0x00)
 ```
 
-## References
-
-- [MS-DNSP] Domain Name Service (DNS) Server Management Protocol
-- Powermad (Kevin Robertson) — PowerShell ADIDNS toolkit
-- krbrelayx / dnstool.py (dirkjanm) — Python ADIDNS toolkit
-
 ## Disclaimer
 
 For use in authorized security assessments, CTFs, and lab environments only. The author assumes no responsibility for misuse.
