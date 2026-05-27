@@ -1845,6 +1845,7 @@ namespace SharpADIDNS
         public string Password;
         public bool   PasswordStdin;
         public string PasswordEnvVar;
+        public string PasswordBase64;
         public bool   AllowCleartextPassword;
         public bool   Ldaps;
 
@@ -1927,6 +1928,7 @@ namespace SharpADIDNS
                 else if (a == "--password" && i + 1 < args.Length) o.Password = args[++i];
                 else if (a == "--password-stdin")                  o.PasswordStdin = true;
                 else if (a == "--password-env" && i + 1 < args.Length) o.PasswordEnvVar = args[++i];
+                else if (a == "--password-base64" && i + 1 < args.Length) o.PasswordBase64 = args[++i];
                 else if (a == "--allow-cleartext-password")        o.AllowCleartextPassword = true;
                 else if (a == "--ldaps")                            o.Ldaps    = true;
                 else if (a == "--force")                            o.Force    = true;
@@ -2086,6 +2088,7 @@ namespace SharpADIDNS
             Console.WriteLine("                              Warns unless --allow-cleartext-password.");
             Console.WriteLine("  --password-stdin            Read password from stdin (one line)");
             Console.WriteLine("  --password-env <VAR>        Read password from environment variable");
+            Console.WriteLine("  --password-base64 <b64>     UTF-8 password as base64 (shell-safe transport)");
             Console.WriteLine("  --allow-cleartext-password  Silence the --password cleartext warning");
             Console.WriteLine("  --ldaps                     Bind over LDAPS (port 636)");
             Console.WriteLine();
@@ -2212,10 +2215,11 @@ namespace SharpADIDNS
             if (opt.Password != null)                       sources++;
             if (opt.PasswordStdin)                          sources++;
             if (!string.IsNullOrEmpty(opt.PasswordEnvVar))  sources++;
+            if (!string.IsNullOrEmpty(opt.PasswordBase64))  sources++;
 
             if (sources > 1)
                 throw new ArgumentException(
-                    "Specify at most one of --password / --password-stdin / --password-env");
+                    "Specify at most one of --password / --password-stdin / --password-env / --password-base64");
 
             if (opt.Password != null)
             {
@@ -2223,8 +2227,9 @@ namespace SharpADIDNS
                     Logger.Warn(
                         "--password is visible in process listings (Sysmon EID 1, " +
                         "Win32_Process commandLine) and shell history. Prefer " +
-                        "--password-stdin, --password-env <VAR>, or omit it to be " +
-                        "prompted. Use --allow-cleartext-password to silence this.");
+                        "--password-stdin, --password-env <VAR>, --password-base64 <b64>, " +
+                        "or omit it to be prompted. Use --allow-cleartext-password " +
+                        "to silence this.");
                 return;
             }
 
@@ -2242,6 +2247,21 @@ namespace SharpADIDNS
                         "--password-env " + opt.PasswordEnvVar +
                         " is not set in this process environment");
                 opt.Password = val;
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(opt.PasswordBase64))
+            {
+                try
+                {
+                    byte[] raw = Convert.FromBase64String(opt.PasswordBase64);
+                    opt.Password = Encoding.UTF8.GetString(raw);
+                }
+                catch (FormatException)
+                {
+                    throw new ArgumentException(
+                        "--password-base64 is not valid base64");
+                }
                 return;
             }
 

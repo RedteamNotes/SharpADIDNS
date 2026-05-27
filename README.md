@@ -85,6 +85,7 @@ SharpADIDNS.exe <action> [options]
 | `--password <pwd>`           | Cleartext password. Visible in process listings, Sysmon EID 1, and shell history; emits a warning unless `--allow-cleartext-password` is also passed. |
 | `--password-stdin`           | Read password from stdin (one line). |
 | `--password-env <VAR>`       | Read password from the named environment variable. |
+| `--password-base64 <b64>`    | UTF-8 password encoded as base64. Useful for transporting passwords containing `'`, `"`, `$`, spaces, or other shell-unfriendly characters through multiple parser layers (e.g. Sliver `execute-assembly`). |
 | `--allow-cleartext-password` | Silence the `--password` cleartext warning. |
 | `--ldaps`                    | Bind over LDAPS (port 636). |
 
