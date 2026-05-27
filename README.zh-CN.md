@@ -22,6 +22,10 @@
 基于 <code>System.DirectoryServices</code> 构建，目标运行环境为 .NET Framework 4.x，并生成体积较小的独立 <code>.exe</code> 文件。适用于经授权的红队行动、渗透测试项目以及实验室研究场景。
 </p>
 
+<p>
+强烈建议阅读[English](README.md)版本，表意更准确，Github审计策略更宽松。
+</p>
+
 <br clear="right">
 
 <img align="right" src="assets/SharpADIDNS-SS-Alpha.png" alt="SharpADIDNS ScreenShot" width="100%">
