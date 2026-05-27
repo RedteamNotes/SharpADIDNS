@@ -1309,14 +1309,14 @@ namespace SharpADIDNS
                         if (!Safety.ConfirmIfHighRisk(opt, node))
                             return ExitCodes.UsageError;
 
+                        NodeSnapshot prev = CaptureNodeState(node);
                         Backup.Snapshot(opt, nodeDn,
-                            opt.Append ? "add(append)" : "add(force-replace)", node);
+                            opt.Append ? "add(append)" : "add(force-replace)", prev);
 
                         if (opt.Append)
                         {
                             node.Properties["dnsRecord"].Add(record);
                             node.CommitChanges();
-                            Logger.Ok("Appended {0} record (existing records kept)", DnsRecord.TypeName(recordType));
                         }
                         else
                         {
@@ -1324,10 +1324,22 @@ namespace SharpADIDNS
                             ReplaceSameTypeRecord(node, record, recordType);
                             SetTombstoneFalse(node);
                             node.CommitChanges();
-                            Logger.Ok("Updated {0} record", DnsRecord.TypeName(recordType));
                         }
-                        Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
-                        Logger.Ok("DN: {0}", nodeDn);
+
+                        if (opt.Format == "json")
+                        {
+                            EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc, prev,
+                                opt.Append ? "append" : "replace");
+                        }
+                        else
+                        {
+                            Logger.Ok(opt.Append
+                                ? "Appended {0} record (existing records kept)"
+                                : "Updated {0} record",
+                                DnsRecord.TypeName(recordType));
+                            Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
+                            Logger.Ok("DN: {0}", nodeDn);
+                        }
                         return ExitCodes.Success;
                     }
 
@@ -1358,9 +1370,16 @@ namespace SharpADIDNS
                         newNode.Properties["dNSTombstoned"].Add(false);
                         newNode.CommitChanges();
 
-                        Logger.Ok("Added {0} record", DnsRecord.TypeName(recordType));
-                        Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
-                        Logger.Ok("DN: {0}", nodeDn);
+                        if (opt.Format == "json")
+                        {
+                            EmitAddReceipt(opt, nodeDn, record, recordType, dataDesc, null, "create");
+                        }
+                        else
+                        {
+                            Logger.Ok("Added {0} record", DnsRecord.TypeName(recordType));
+                            Logger.Ok("{0}.{1} -> {2}", opt.Name, opt.Zone, dataDesc);
+                            Logger.Ok("DN: {0}", nodeDn);
+                        }
                     }
                 }
             }
@@ -1414,7 +1433,8 @@ namespace SharpADIDNS
                     return ExitCodes.Success;
                 }
 
-                Backup.Snapshot(opt, nodeDn, "disable", node);
+                NodeSnapshot prev = CaptureNodeState(node);
+                Backup.Snapshot(opt, nodeDn, "disable", prev);
 
                 byte[] tomb = DnsRecord.BuildTombstone();
                 node.Properties["dnsRecord"].Clear();
@@ -1427,10 +1447,17 @@ namespace SharpADIDNS
 
                 node.CommitChanges();
 
-                Logger.Ok("Tombstoned node (soft delete)");
-                Logger.Ok("DN: {0}", nodeDn);
-                Logger.Info(opt, "The dnsNode object remains; DNS scavenging removes it after the");
-                Logger.Info(opt, "DsTombstoneInterval (default 14 days on Server 2008+).");
+                if (opt.Format == "json")
+                {
+                    EmitDisableReceipt(opt, nodeDn, prev);
+                }
+                else
+                {
+                    Logger.Ok("Tombstoned node (soft delete)");
+                    Logger.Ok("DN: {0}", nodeDn);
+                    Logger.Info(opt, "The dnsNode object remains; DNS scavenging removes it after the");
+                    Logger.Info(opt, "DsTombstoneInterval (default 14 days on Server 2008+).");
+                }
             }
             return ExitCodes.Success;
         }
@@ -1482,13 +1509,21 @@ namespace SharpADIDNS
                     if (!Safety.ConfirmIfHighRisk(opt, node))
                         return ExitCodes.UsageError;
 
-                    Backup.Snapshot(opt, nodeDn, "remove", node);
+                    NodeSnapshot prev = CaptureNodeState(node);
+                    Backup.Snapshot(opt, nodeDn, "remove", prev);
 
                     parent.Children.Remove(node);
                     parent.CommitChanges();
 
-                    Logger.Ok("Removed node (hard delete)");
-                    Logger.Ok("DN: {0}", nodeDn);
+                    if (opt.Format == "json")
+                    {
+                        EmitRemoveReceipt(opt, nodeDn, prev);
+                    }
+                    else
+                    {
+                        Logger.Ok("Removed node (hard delete)");
+                        Logger.Ok("DN: {0}", nodeDn);
+                    }
                 }
             }
             return ExitCodes.Success;
@@ -1594,6 +1629,28 @@ namespace SharpADIDNS
             if (node.Properties["dNSTombstoned"].Value == null) return false;
             bool v;
             return bool.TryParse(node.Properties["dNSTombstoned"].Value.ToString(), out v) && v;
+        }
+
+        // -------- pre-modification state capture (for backup + receipt) --------
+        internal sealed class NodeSnapshot
+        {
+            public bool Tombstoned;
+            public List<byte[]> Records = new List<byte[]>();
+        }
+
+        internal static NodeSnapshot CaptureNodeState(DirectoryEntry node)
+        {
+            NodeSnapshot s = new NodeSnapshot();
+            s.Tombstoned = IsTombstoned(node);
+            if (node.Properties.Contains("dnsRecord"))
+            {
+                foreach (object o in node.Properties["dnsRecord"])
+                {
+                    byte[] b = o as byte[];
+                    if (b != null) s.Records.Add(b);
+                }
+            }
+            return s;
         }
 
         // -------- enum filter helpers --------
@@ -1725,6 +1782,101 @@ namespace SharpADIDNS
 
             sb.AppendFormat("\"blob_base64\":\"{0}\"", Convert.ToBase64String(data));
             sb.Append("}");
+        }
+
+        // -------- write-action JSON receipts (only when opt.Format == "json") --------
+        private static void EmitAddReceipt(Options opt, string nodeDn, byte[] newRecord,
+                                           ushort recordType, string dataDesc,
+                                           NodeSnapshot prev, string operation)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("{");
+            sb.Append("\"action\":\"add\",");
+            sb.Append("\"result\":\"ok\",");
+            sb.AppendFormat("\"operation\":\"{0}\",", operation);
+            sb.AppendFormat("\"dn\":\"{0}\",",   Json.Escape(nodeDn));
+            sb.AppendFormat("\"zone\":\"{0}\",", Json.Escape(opt.Zone));
+            sb.AppendFormat("\"name\":\"{0}\",", Json.Escape(opt.Name));
+            sb.Append("\"record\":");
+            WriteRecordJson(sb, newRecord);
+            sb.Append(",");
+            sb.Append("\"previous_state\":");
+            WriteSnapshotJson(sb, prev);
+            sb.Append(",");
+            sb.Append("\"reverse\":");
+            if (operation == "create")
+                sb.Append("\"").Append(Json.Escape(BuildReverseCommand(opt, "remove"))).Append("\"");
+            else
+                sb.Append("null");
+            sb.Append("}");
+            Console.WriteLine(sb.ToString());
+        }
+
+        private static void EmitDisableReceipt(Options opt, string nodeDn, NodeSnapshot prev)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("{");
+            sb.Append("\"action\":\"disable\",");
+            sb.Append("\"result\":\"ok\",");
+            sb.AppendFormat("\"dn\":\"{0}\",",   Json.Escape(nodeDn));
+            sb.AppendFormat("\"zone\":\"{0}\",", Json.Escape(opt.Zone));
+            sb.AppendFormat("\"name\":\"{0}\",", Json.Escape(opt.Name));
+            sb.Append("\"previous_state\":");
+            WriteSnapshotJson(sb, prev);
+            sb.Append(",\"reverse\":null");
+            sb.Append("}");
+            Console.WriteLine(sb.ToString());
+        }
+
+        private static void EmitRemoveReceipt(Options opt, string nodeDn, NodeSnapshot prev)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("{");
+            sb.Append("\"action\":\"remove\",");
+            sb.Append("\"result\":\"ok\",");
+            sb.AppendFormat("\"dn\":\"{0}\",",   Json.Escape(nodeDn));
+            sb.AppendFormat("\"zone\":\"{0}\",", Json.Escape(opt.Zone));
+            sb.AppendFormat("\"name\":\"{0}\",", Json.Escape(opt.Name));
+            sb.Append("\"previous_state\":");
+            WriteSnapshotJson(sb, prev);
+            sb.Append(",\"reverse\":null");
+            sb.Append("}");
+            Console.WriteLine(sb.ToString());
+        }
+
+        private static void WriteSnapshotJson(StringBuilder sb, NodeSnapshot snap)
+        {
+            if (snap == null)
+            {
+                sb.Append("null");
+                return;
+            }
+            sb.Append("{");
+            sb.AppendFormat("\"tombstoned\":{0},", snap.Tombstoned ? "true" : "false");
+            sb.Append("\"records_base64\":[");
+            for (int i = 0; i < snap.Records.Count; i++)
+            {
+                if (i > 0) sb.Append(",");
+                sb.Append("\"").Append(Convert.ToBase64String(snap.Records[i])).Append("\"");
+            }
+            sb.Append("]}");
+        }
+
+        private static string BuildReverseCommand(Options opt, string verb)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("SharpADIDNS.exe ").Append(verb);
+            sb.Append(" --zone ").Append(opt.Zone);
+            sb.Append(" --name ");
+            if (opt.Name.IndexOfAny(new[] { ' ', '*', '\t' }) >= 0)
+                sb.Append("\"").Append(opt.Name).Append("\"");
+            else
+                sb.Append(opt.Name);
+            sb.Append(" --dn ").Append(opt.DomainDn);
+            if (!string.IsNullOrEmpty(opt.Server))   sb.Append(" --server ").Append(opt.Server);
+            if (opt.Partition != "DomainDnsZones")   sb.Append(" --partition ").Append(opt.Partition);
+            sb.Append(" --yes");
+            return sb.ToString();
         }
 
         // -------- query permissions printer --------
@@ -2347,7 +2499,8 @@ namespace SharpADIDNS
     // -----------------------------------------------------------------------
     internal static class Backup
     {
-        public static void Snapshot(Options opt, string nodeDn, string action, DirectoryEntry node)
+        public static void Snapshot(Options opt, string nodeDn, string action,
+                                    Actions.NodeSnapshot snap)
         {
             if (string.IsNullOrEmpty(opt.BackupTo)) return;
 
@@ -2356,16 +2509,8 @@ namespace SharpADIDNS
             bool toStdout = opt.BackupTo == "-";
             if (toStdout && opt.Format == "json") return;
 
-            bool tomb = node != null && Actions.IsTombstoned(node);
-            List<byte[]> records = new List<byte[]>();
-            if (node != null && node.Properties.Contains("dnsRecord"))
-            {
-                foreach (object o in node.Properties["dnsRecord"])
-                {
-                    byte[] b = o as byte[];
-                    if (b != null) records.Add(b);
-                }
-            }
+            bool tomb = snap != null && snap.Tombstoned;
+            int recordCount = snap == null ? 0 : snap.Records.Count;
 
             StringBuilder json = new StringBuilder();
             json.Append("{");
@@ -2375,17 +2520,20 @@ namespace SharpADIDNS
             json.Append("\"dn\":\"").Append(Json.Escape(nodeDn)).Append("\",");
             json.Append("\"dNSTombstoned\":").Append(tomb ? "true" : "false").Append(",");
             json.Append("\"records\":[");
-            for (int i = 0; i < records.Count; i++)
+            if (snap != null)
             {
-                if (i > 0) json.Append(",");
-                json.Append("\"").Append(Convert.ToBase64String(records[i])).Append("\"");
+                for (int i = 0; i < snap.Records.Count; i++)
+                {
+                    if (i > 0) json.Append(",");
+                    json.Append("\"").Append(Convert.ToBase64String(snap.Records[i])).Append("\"");
+                }
             }
             json.Append("]}");
 
             if (toStdout)
             {
                 Console.WriteLine(json.ToString());
-                Logger.Info(opt, "Snapshot emitted on stdout ({0} record(s))", records.Count);
+                Logger.Info(opt, "Snapshot emitted on stdout ({0} record(s))", recordCount);
             }
             else
             {
@@ -2398,7 +2546,7 @@ namespace SharpADIDNS
                     throw new IOException(
                         "Failed to write --backup-to file '" + opt.BackupTo + "': " + ex.Message, ex);
                 }
-                Logger.Info(opt, "Snapshot appended to: {0} ({1} record(s))", opt.BackupTo, records.Count);
+                Logger.Info(opt, "Snapshot appended to: {0} ({1} record(s))", opt.BackupTo, recordCount);
             }
         }
     }
