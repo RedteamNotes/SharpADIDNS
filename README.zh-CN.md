@@ -82,7 +82,7 @@ tests\Tests.exe
 SharpADIDNS.exe <action> [options]
 ```
 
-### 目标定位
+### 指定目标
 
 | 选项 | 说明 |
 | ------ | ----------- |
@@ -92,7 +92,7 @@ SharpADIDNS.exe <action> [options]
 | `--partition <name>`  | `DomainDnsZones`（默认）/ `ForestDnsZones` / `System` |
 | `--server <host>`     | 目标 DC FQDN 或 IP。省略则走 serverless 绑定。 |
 
-### 记录数据（仅 `add`）
+### `add`记录时的数据项
 
 | 选项 | 说明 |
 | ------ | ----------- |
@@ -107,7 +107,7 @@ SharpADIDNS.exe <action> [options]
 | `--force`           | 替换节点上同类型的记录。该节点其他类型的记录保留。 |
 | `--append`          | 保留节点上**全部**已有记录并追加一条。与 `--force` 互斥。对 tombstoned 节点拒绝执行 — 解 tombstone 必须用 `--force`。 |
 
-### 认证
+### 认证信息
 
 | 选项 | 说明 |
 | ------ | ----------- |
@@ -121,7 +121,7 @@ SharpADIDNS.exe <action> [options]
 
 如果只给了 `--username` 但没给任何密码源，会交互式提示输入密码（不回显）。如果 stdin 被重定向（CI、脚本 pipe），程序会以 usage code 1 退出而不是静默等待。
 
-### 安全
+### 安全操作
 
 | 选项 | 说明 |
 | ------ | ----------- |
@@ -182,7 +182,7 @@ SharpADIDNS.exe query @common.args --name sccm
 
 接受 `--flag value`（空格）和 `--flag=value`（等号）两种形式。等号形式只在首个 `=` 处切分，所以带 `=` 的值（base64 的 `==` 填充、DN 字符串如 `DC=redteamnotes,DC=local`）能完整保留。适合穿过多层 shell 解析（如 Sliver `execute-assembly`）— 那种场景下空格处理脆弱。
 
-### 按动词的子帮助
+### 子命令的帮助
 
 `SharpADIDNS.exe <verb> --help`（例 `add --help`、`enum --help`）打印该动词专属 USAGE 行和相关章节（`add` 显示 RECORD DATA；`enum` 显示 ENUM FILTERS；`list-zones` 都不显示）。不带 verb 的 `--help` 打印完整参考。
 
