@@ -75,7 +75,10 @@ namespace SharpADIDNS
 
                 if (opt.ShowHelp)
                 {
-                    Options.PrintUsage();
+                    if (!string.IsNullOrEmpty(opt.Action))
+                        Options.PrintActionUsage(opt.Action);
+                    else
+                        Options.PrintUsage();
                     return ExitCodes.Success;
                 }
 
@@ -2527,6 +2530,66 @@ namespace SharpADIDNS
             PrintExitCodes();
             PrintExamples();
             PrintNotes();
+        }
+
+        // Drill-in help triggered by 'SharpADIDNS.exe <action> --help'.
+        // Shows only the sections relevant to the chosen verb, plus a
+        // verb-specific USAGE line and a footer pointing at the full
+        // reference.
+        public static void PrintActionUsage(string action)
+        {
+            PrintHeader();
+            Console.WriteLine("USAGE:  " + action);
+            Console.WriteLine();
+            switch (action)
+            {
+                case "enum":
+                    Console.WriteLine("  SharpADIDNS.exe enum --zone <fqdn> --dn <DN>");
+                    Console.WriteLine("                  [enum-filters] [auth] [safety] [output]");
+                    break;
+                case "query":
+                    Console.WriteLine("  SharpADIDNS.exe query --zone <fqdn> --name <label> --dn <DN>");
+                    Console.WriteLine("                  [auth] [safety] [output]");
+                    break;
+                case "add":
+                    Console.WriteLine("  SharpADIDNS.exe add --zone <fqdn> --name <label> --dn <DN>");
+                    Console.WriteLine("                  ( --type <T> --data <value> | --raw <base64> )");
+                    Console.WriteLine("                  [--ttl <sec>] [--force | --append]");
+                    Console.WriteLine("                  [--mimic-aging] [--set-owner <SID|name>]");
+                    Console.WriteLine("                  [type-specific: --srv-priority/--srv-weight/--srv-port,");
+                    Console.WriteLine("                                  --mx-pref]");
+                    Console.WriteLine("                  [auth] [safety] [output]");
+                    break;
+                case "disable":
+                    Console.WriteLine("  SharpADIDNS.exe disable --zone <fqdn> --name <label> --dn <DN>");
+                    Console.WriteLine("                  [auth] [safety] [output]");
+                    break;
+                case "remove":
+                    Console.WriteLine("  SharpADIDNS.exe remove --zone <fqdn> --name <label> --dn <DN>");
+                    Console.WriteLine("                  [auth] [safety] [output]");
+                    break;
+                case "list-zones":
+                    Console.WriteLine("  SharpADIDNS.exe list-zones --dn <DN> [--server <host>]");
+                    Console.WriteLine("                  [auth] [safety] [output]");
+                    break;
+                default:
+                    PrintUsage();
+                    return;
+            }
+            Console.WriteLine();
+
+            PrintTargeting();
+            if (action == "add")  PrintRecordData();
+            PrintAuth();
+            PrintSafety();
+            if (action == "enum") PrintEnumFilters();
+            PrintOutput();
+            PrintExitCodes();
+
+            Console.WriteLine("MORE");
+            Console.WriteLine("  Full reference + examples: SharpADIDNS.exe --help");
+            Console.WriteLine("  End-to-end scenarios:      docs/RECIPES.md");
+            Console.WriteLine();
         }
 
         private static void PrintHeader()
