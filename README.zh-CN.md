@@ -5,7 +5,7 @@
 <img align="right" src="assets/SharpADIDNS-Logo.png" alt="SharpADIDNS Logo" width="280">
 
 <p>
-基于 LDAP 读取与修改 AD 集成 DNS 记录的 C# 命令行工具，面向 AD-DNS 的运维与研究场景；针对远程 .NET 装载（如 Sliver <code>execute-assembly</code>）的部署方式做了一系列工程化适配。
+基于 LDAP 读取与修改 AD 集成 DNS 记录的 C# 命令行工具，面向 ADIDNS 的运维与研究场景；针对远程 .NET 装载（如 Sliver <code>execute-assembly</code>）的部署方式做了一系列工程化适配。
 </p>
 
 <p>
