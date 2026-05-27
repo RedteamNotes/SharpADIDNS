@@ -1,6 +1,6 @@
 # SharpADIDNS
 
-A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, built for serious red teaming and packed with tradecraft features tailored for Sliver execute-assembly.
+A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, built for serious red teaming and packed with tradecraft features tailored for Sliver C2 execute-assembly.
 
 Built for serious red-team use: first-class Sliver `execute-assembly` mode (`--c2`), `--dry-run` pre-flight with structured `--backup-to` rollback, batch scripting (`--script`), JSON receipts with cross-invocation `correlation_id`, and active fingerprint mitigation — `--mimic-aging` defeats the `Timestamp=0` IOC, `--set-owner` camouflages object ownership, `--require-pdc` keeps writes off non-PDC replicas.
 
