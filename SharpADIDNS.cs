@@ -2286,6 +2286,8 @@ namespace SharpADIDNS
 
         internal static void ApplyArgs(Options o, string[] args)
         {
+            // Support GNU-style --flag=value in addition to --flag value.
+            args = SplitEqualsArgs(args);
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -2378,6 +2380,27 @@ namespace SharpADIDNS
             if (!int.TryParse(raw, out v) || v < 0 || v > 65535)
                 throw new ArgumentException(name + " must be an integer in 0..65535 (got: " + raw + ")");
             return v;
+        }
+
+        private static string[] SplitEqualsArgs(string[] args)
+        {
+            if (args == null) return new string[0];
+            List<string> result = new List<string>();
+            foreach (string a in args)
+            {
+                if (a != null && a.Length > 2 && a[0] == '-' && a[1] == '-')
+                {
+                    int eq = a.IndexOf('=');
+                    if (eq > 2)
+                    {
+                        result.Add(a.Substring(0, eq));
+                        result.Add(a.Substring(eq + 1));
+                        continue;
+                    }
+                }
+                result.Add(a);
+            }
+            return result.ToArray();
         }
 
         private static string[] ExpandArgfiles(string[] args)
