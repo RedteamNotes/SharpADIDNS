@@ -35,6 +35,8 @@ No third-party dependencies.
 
 **Prebuilt binary**: download `SharpADIDNS.exe` from the [Releases page](https://github.com/RedteamNotes/SharpADIDNS/releases/latest) (CI attaches a fresh build to every tagged release). To build from source, follow the `csc` command above. The `release/` directory is not tracked in the repo.
 
+**End-to-end scenarios**: see [`docs/RECIPES.md`](docs/RECIPES.md) for cookbook-style walkthroughs (DNS recon, single-record add with rollback, stealth add with `--mimic-aging` + `--set-owner`, wildcard injection, SRV relay, batch ops, engagement cleanup, DACL pre-flight). Reference docs (this README) cover the flags; recipes cover the *flows*.
+
 ### Tests
 
 Unit tests cover the pure functions (no AD required): `Bin` endian helpers, `DnsRecord` builders + decoders, `DNS_COUNT_NAME` edge cases, tombstone FILETIME, `Json.Escape`. Build and run:
