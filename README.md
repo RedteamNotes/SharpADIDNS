@@ -2,6 +2,8 @@
 
 C# command-line tool for reading and modifying Active Directory-Integrated DNS (ADIDNS) records over LDAP.
 
+Built for serious red-team use: first-class Sliver `execute-assembly` mode (`--c2`), `--dry-run` pre-flight with structured `--backup-to` rollback, batch scripting (`--script`), JSON receipts with cross-invocation `correlation_id`, and active fingerprint mitigation — `--mimic-aging` defeats the `Timestamp=0` IOC, `--set-owner` camouflages object ownership, `--require-pdc` keeps writes off non-PDC replicas.
+
 Built around `System.DirectoryServices`. Targets .NET Framework 4.x and produces a small standalone `.exe`. Intended for authorized red team / pentest engagements and lab work.
 
 ## Capabilities

@@ -28,7 +28,7 @@ namespace SharpADIDNS
     // -----------------------------------------------------------------------
     internal static class Program
     {
-        public const string Version = "0.5.41";
+        public const string Version = "0.5.49";
 
         // Unique per process. All structured (JSON) output lines from this
         // invocation carry the same correlation_id, so an operator
@@ -2595,9 +2595,14 @@ namespace SharpADIDNS
         private static void PrintHeader()
         {
             Console.WriteLine();
-            Console.WriteLine("SharpADIDNS v" + Program.Version + "  --  AD-Integrated DNS manipulation via LDAP");
+            Console.WriteLine("SharpADIDNS v" + Program.Version);
             Console.WriteLine("https://github.com/RedteamNotes/SharpADIDNS");
             Console.WriteLine("By @RedteamNotes   Email: 888256@gmail.com");
+            Console.WriteLine();
+            Console.WriteLine("  C# command-line tool for reading and modifying Active Directory-Integrated");
+            Console.WriteLine("  DNS (ADIDNS) records over LDAP, with a tradecraft layer purpose-built for");
+            Console.WriteLine("  Sliver execute-assembly engagements: dry-run + structured backup, JSON");
+            Console.WriteLine("  receipts, batch scripting, and active fingerprint mitigation.");
             Console.WriteLine();
             Console.WriteLine("  Tip: any argument may be replaced by '@file.txt' to read more args");
             Console.WriteLine("  from that file (one per whitespace; '#' starts a line comment).");

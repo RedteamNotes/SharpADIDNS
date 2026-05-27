@@ -4,6 +4,15 @@ All notable changes to this project. Format roughly follows [Keep a Changelog](h
 
 Each release also has detailed notes attached on the [Releases page](https://github.com/RedteamNotes/SharpADIDNS/releases).
 
+## [0.5.49] - 2026-05-27
+
+Tool intro / tagline rewrite. No CLI / behavioral change.
+
+### Changed
+- `--help` header description rewritten to surface the OPSEC / tradecraft layer (was just "AD-Integrated DNS manipulation via LDAP"; now a 4-line paragraph naming `--c2` Sliver mode, dry-run + backup, JSON receipts, batch scripting, active fingerprint mitigation).
+- `README.md` intro adds a paragraph between the one-line description and the implementation note, listing the same tradecraft features with flag-level callouts (`--c2`, `--dry-run`, `--backup-to`, `--script`, `correlation_id`, `--mimic-aging`, `--set-owner`, `--require-pdc`).
+- GitHub repo description updated to match.
+
 ## [0.5.41] - 2026-05-27
 
 Documentation + invocation-layout polish. No CLI / behavioral change.
@@ -144,6 +153,7 @@ Tier 1: "safe to use in serious engagements" threshold reached.
 - Distinct exit codes (0 / 1 / 2 / 3 / 4) for scripting.
 - Single-file .NET Framework 4.x executable, no third-party dependencies, built with the in-box `csc.exe`.
 
+[0.5.49]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.49
 [0.5.41]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.41
 [0.5.4]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.4
 [0.5.0]: https://github.com/RedteamNotes/SharpADIDNS/releases/tag/v0.5.0
