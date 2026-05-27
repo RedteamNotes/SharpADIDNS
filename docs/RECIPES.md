@@ -16,6 +16,12 @@ Every recipe uses the [`--c2` mode](../README.md#using-via-sliver-execute-assemb
 
 Bring your own values; substitute everywhere.
 
+### Argument syntax shortcuts
+
+Two flag forms are accepted: `--flag value` (space-separated, used throughout the recipes) and `--flag=value` (equals form). The equals form is more robust through multi-layer shell parsing (Sliver `execute-assembly`, scripted ssh, etc.) when the value contains spaces, quotes, or `$`. Mixing is fine: `--username=corp\u --password-base64 UmVk...` works.
+
+Per-verb help is also available: `SharpADIDNS.exe add --help` shows only the flags relevant to `add`; `enum --help` only the enum-relevant subset; etc. Global `--help` (no verb) prints the full reference.
+
 ---
 
 ## 1. DNS landscape recon
@@ -224,9 +230,9 @@ sliver > execute-assembly -p dllhost.exe SharpADIDNS.exe \
 
 Note the doubled backslash `\\\\` inside `--set-owner`: Sliver's command parser eats one pair, the C# arg parser eats the second pair, the resulting string seen by the tool is `$ZONE\DnsAdmins`. **Always test the escape level in your specific Sliver setup first** with a `--dry-run` script.
 
-Output on stdout: 3 receipts (one per statement) + 1 `script_summary` line. Pipe through `jq -c .` on operator side; each line is independently valid JSON.
+Output on stdout: 3 receipts (one per statement) + 1 `script_summary` line. Pipe through `jq -c .` on operator side; each line is independently valid JSON, and all four share the same `correlation_id` so a downstream collector can group them with `jq -s 'group_by(.correlation_id)'`.
 
-`--script-on-error halt` (the default) stops on first failure. For "best-effort batch" use `--script-on-error continue` and check the `failed` count in the summary.
+`--script-on-error halt` (the default) stops on first failure. For "best-effort batch" use `--script-on-error continue` (or the shorter alias `--continue-on-error`) and check the `failed` count in the summary.
 
 ---
 
