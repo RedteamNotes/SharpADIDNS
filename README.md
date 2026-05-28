@@ -15,11 +15,11 @@ A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, bui
 </p>
 
 <p>
-Built for serious red-team use: first-class Sliver <code>execute-assembly</code> mode <code>--c2</code>, <code>--dry-run</code> pre-flight with structured <code>--backup-to</code> rollback, batch scripting <code>--script</code>, JSON receipts with cross-invocation <code>correlation_id</code>, and active fingerprint mitigation — <code>--mimic-aging</code> defeats the <code>Timestamp=0</code> IOC, <code>--set-owner</code> camouflages object ownership, <code>--require-pdc</code> keeps writes off non-PDC replicas.
+Operationally focused for real red-team use: first-class Sliver <code>execute-assembly</code> mode <code>--c2</code>, <code>--dry-run</code> pre-flight with structured <code>--backup-to</code> rollback, batch scripting <code>--script</code>, JSON receipts with cross-invocation <code>correlation_id</code>, and active fingerprint mitigation — <code>--mimic-aging</code> defeats the <code>Timestamp=0</code> IOC, <code>--set-owner</code> camouflages object ownership, <code>--require-pdc</code> keeps writes off non-PDC replicas.
 </p>
 
 <p>
-Built around <code>System.DirectoryServices</code>. Targets .NET Framework 4.x and produces a small standalone <code>.exe</code>. Intended for authorized red team / pentest engagements and lab work.
+Implemented with <code>System.DirectoryServices</code>, targeting .NET Framework 4.x and producing a compact standalone <code>.exe</code>. Intended for authorized redteaming, penetration testing, and lab environments..
 </p>
 
 <br clear="right">
