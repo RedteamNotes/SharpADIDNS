@@ -15,11 +15,11 @@
 </p>
 
 <p>
-面向严肃红队使用场景构建：原生支持 Sliver <code>execute-assembly</code> 模式 <code>--c2</code>；支持 <code>--dry-run</code> 预执行检查，并配合结构化 <code>--backup-to</code> 回滚备份；支持批量脚本执行 <code>--script</code>；支持带跨次调用 <code>correlation_id</code> 的 JSON 回执；并提供主动指纹缓解能力。<code>--mimic-aging</code> 可规避 <code>Timestamp=0</code> 这一 IOC，<code>--set-owner</code> 可伪装对象所有权，<code>--require-pdc</code> 可确保写入操作不会落到非 PDC 副本上。
+典型的红队场景参数有：原生支持 Sliver <code>execute-assembly</code> 模式 <code>--c2</code>；支持 <code>--dry-run</code> 预执行检查，并配合结构化 <code>--backup-to</code> 回滚备份；支持批量脚本执行 <code>--script</code>；支持带跨次调用 <code>correlation_id</code> 的 JSON 回执；并提供主动指纹缓解能力。<code>--mimic-aging</code> 可规避 <code>Timestamp=0</code> 这一 IOC，<code>--set-owner</code> 可伪装对象所有权，<code>--require-pdc</code> 可确保写入操作不会落到非 PDC 副本上。
 </p>
 
 <p>
-基于 <code>System.DirectoryServices</code> 构建，目标运行环境为 .NET Framework 4.x，并生成体积较小的独立 <code>.exe</code> 文件。适用于经授权的红队行动、渗透测试项目以及实验室研究场景。
+本应用基于 <code>System.DirectoryServices</code> 构建，目标运行环境为 .NET Framework 4.x，并生成体积较小的独立 <code>.exe</code> 文件。适用于经授权的红队行动、渗透测试项目以及实验室研究场景。
 </p>
 
 <p>
