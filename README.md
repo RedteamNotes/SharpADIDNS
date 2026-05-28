@@ -39,7 +39,7 @@ Implemented with <code>System.DirectoryServices</code>, targeting .NET Framework
 | remove  | Hard-delete the `dnsNode` object |
 | list-zones | Enumerate `dnsZone` objects across all three partitions (DomainDnsZones / ForestDnsZones / System) |
 
-Record builders implement the `DNS_RPC_RECORD` structure from [MS-DNSP] and the `DNS_COUNT_NAME` label encoding used for CNAME / PTR / NS.
+Record builders implement the `DNS_RPC_RECORD` structure from [MS-DNSP](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/) and the `DNS_COUNT_NAME` label encoding used for CNAME / PTR / NS.
 
 ## Build
 
