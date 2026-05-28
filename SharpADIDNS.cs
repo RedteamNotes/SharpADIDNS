@@ -1,9 +1,7 @@
 /*
- * SharpADIDNS
- * ------------
- * A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, 
- * built for serious red teaming and packed with tradecraft features tailored 
- * for Sliver C2 execute-assembly.
+ * SharpADIDNS - A C# CLI tool for reading and modifying AD-Integrated DNS 
+ * records over LDAP,built for serious red teaming and packed with tradecraft 
+ * features tailoredor Sliver C2 execute-assembly.
  */
 
 using System;
