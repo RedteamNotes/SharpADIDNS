@@ -512,6 +512,60 @@ stdout 按顺序每条语句一行 receipt JSON，最后一行 summary：
 
 按动作作用域的 flag（`--name`、`--data`、`--raw`、`--force`、`--append`、`--mimic-aging`、`--set-owner`、`--type`、`--srv-*`、`--mx-pref`、`--filter-*`、`--only-tombstoned`、`--no-tombstoned`）在每条语句之间会**重置** — 不会跨语句串味。定位和认证类 flag（`--zone`、`--dn`、`--server`、`--username`、`--password*`、`--ldaps`、`--partition`）从外层继承，可被单条语句覆盖。
 
+### Sliver 别名
+
+可以把 SharpADIDNS 注册为持久化 Sliver 别名，之后用 `sharpadidns` 即可跨 session 调用，无需每次重新上传。
+
+**1. 创建别名目录并放入二进制：**
+
+```bash
+mkdir -p ~/.sliver-client/aliases/sharpadidns
+cp SharpADIDNS.exe ~/.sliver-client/aliases/sharpadidns/
+```
+
+**2. 在同一目录创建 `alias.json`：**
+
+```json
+{
+  "name": "SharpADIDNS",
+  "version": "v0.9.5",
+  "command_name": "sharpadidns",
+  "original_author": "RedteamNotes",
+  "repo_url": "https://github.com/RedteamNotes/SharpADIDNS",
+  "help": "C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP.",
+  "long_help": "Wrapper for SharpADIDNS.exe using Sliver execute-assembly alias mode. Pass SharpADIDNS arguments after -- , -h for help.",
+  "entrypoint": "Main",
+  "allow_args": true,
+  "default_args": "",
+  "is_reflective": false,
+  "is_assembly": true,
+  "files": [
+    {
+      "os": "windows",
+      "arch": "amd64",
+      "path": "SharpADIDNS.exe"
+    },
+    {
+      "os": "windows",
+      "arch": "386",
+      "path": "SharpADIDNS.exe"
+    }
+  ]
+}
+```
+
+**3. 加载并验证：**
+
+```
+[sliver] > aliases load ~/.sliver-client/aliases/sharpadidns/alias.json
+[*] SharpADIDNS alias has been loaded
+
+[sliver] (SESSION) > sharpadidns -- --version
+SharpADIDNS v0.9.5
+```
+
+加载后，`sharpadidns -- <args>` 等价于 `execute-assembly SharpADIDNS.exe -p <proc> -- <args>`。别名在客户端重启后持久保留。升级时更新 `alias.json` 中的 `version` 字段。
+
 ## 记录格式参考
 
 每条 `dnsRecord` 值都是一个 `DNS_RPC_RECORD` blob：

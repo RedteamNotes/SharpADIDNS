@@ -506,6 +506,60 @@ Stdout contains one receipt JSON line per statement (in order), plus a final sum
 
 Action-scoped flags (`--name`, `--data`, `--raw`, `--force`, `--append`, `--mimic-aging`, `--set-owner`, `--type`, `--srv-*`, `--mx-pref`, `--filter-*`, `--only-tombstoned`, `--no-tombstoned`) are reset per statement -- they don't bleed between statements. Targeting and auth flags (`--zone`, `--dn`, `--server`, `--username`, `--password*`, `--ldaps`, `--partition`) are inherited from outer and can be overridden per statement.
 
+### Sliver alias
+
+You can register SharpADIDNS as a persistent Sliver alias so it is available as `sharpadidns` across sessions without re-uploading the binary each time.
+
+**1. Create the alias directory and drop in the binary:**
+
+```bash
+mkdir -p ~/.sliver-client/aliases/sharpadidns
+cp SharpADIDNS.exe ~/.sliver-client/aliases/sharpadidns/
+```
+
+**2. Create `alias.json` in the same directory:**
+
+```json
+{
+  "name": "SharpADIDNS",
+  "version": "v0.9.5",
+  "command_name": "sharpadidns",
+  "original_author": "RedteamNotes",
+  "repo_url": "https://github.com/RedteamNotes/SharpADIDNS",
+  "help": "C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP.",
+  "long_help": "Wrapper for SharpADIDNS.exe using Sliver execute-assembly alias mode. Pass SharpADIDNS arguments after -- , -h for help.",
+  "entrypoint": "Main",
+  "allow_args": true,
+  "default_args": "",
+  "is_reflective": false,
+  "is_assembly": true,
+  "files": [
+    {
+      "os": "windows",
+      "arch": "amd64",
+      "path": "SharpADIDNS.exe"
+    },
+    {
+      "os": "windows",
+      "arch": "386",
+      "path": "SharpADIDNS.exe"
+    }
+  ]
+}
+```
+
+**3. Load and verify:**
+
+```
+[sliver] > aliases load ~/.sliver-client/aliases/sharpadidns/alias.json
+[*] SharpADIDNS alias has been loaded
+
+[sliver] (SESSION) > sharpadidns -- --version
+SharpADIDNS v0.9.5
+```
+
+After loading, `sharpadidns -- <args>` is equivalent to `execute-assembly SharpADIDNS.exe -p <proc> -- <args>`. The alias persists across client restarts once loaded. Update `version` in `alias.json` when upgrading.
+
 ## Record format reference
 
 Every `dnsRecord` value is a `DNS_RPC_RECORD` blob:
