@@ -15,7 +15,7 @@ A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, bui
 </p>
 
 <p>
-Operationally focused for real redteaming use: first-class Sliver <code>execute-assembly</code> mode <code>--c2</code>, <code>--dry-run</code> pre-flight with structured <code>--backup-to</code> rollback, batch scripting <code>--script</code>, JSON receipts with cross-invocation <code>correlation_id</code>, and active fingerprint mitigation — <code>--mimic-aging</code> defeats the <code>Timestamp=0</code> [IOC](https://www.crowdstrike.com/en-us/cybersecurity-101/threat-intelligence/indicators-of-compromise-ioc/), <code>--set-owner</code> camouflages object ownership, <code>--require-pdc</code> keeps writes off non-PDC replicas.
+Operationally focused for real redteaming use: first-class Sliver <code>execute-assembly</code> mode <code>--c2</code>, <code>--dry-run</code> pre-flight with structured <code>--backup-to</code> rollback, batch scripting <code>--script</code>, JSON receipts with cross-invocation <code>correlation_id</code>, and active fingerprint mitigation — <code>--mimic-aging</code> defeats the <code>Timestamp=0</code> <a href="https://www.crowdstrike.com/en-us/cybersecurity-101/threat-intelligence/indicators-of-compromise-ioc/">IOC</a>, <code>--set-owner</code> camouflages object ownership, <code>--require-pdc</code> keeps writes off non-PDC replicas.
 </p>
 
 <p>
