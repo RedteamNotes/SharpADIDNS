@@ -330,7 +330,7 @@ What writing to AD-Integrated DNS over LDAP looks like to defenders. Use `--dry-
 
 ### Windows event log
 
-These fire on the **DC that receives the write**. They require Directory Service Access auditing to be enabled (default is off, but commonly enabled in enterprises running MDE / MDI / mature EDR).
+These fire on the **DC that receives the write**. They require Directory Service Access auditing to be enabled (default is off, but commonly enabled in enterprises running [MDE](https://learn.microsoft.com/en-us/defender-endpoint/) / [MDI](https://learn.microsoft.com/en-us/defender-for-identity/) / mature EDR).
 
 | Event ID | Source | Triggered by |
 | -------- | ------ | ------------ |
