@@ -1,44 +1,9 @@
 /*
  * SharpADIDNS
  * ------------
- * A standalone C# command-line utility for reading, decoding, creating,
- * modifying, tombstoning, and removing Active Directory-integrated DNS
- * records over LDAP or LDAPS.
- *
- * This file contains the full SharpADIDNS implementation, including the CLI
- * entry point, argument parsing, credential handling, LDAP binding through
- * System.DirectoryServices, ADIDNS zone and dnsNode operations, dnsRecord
- * blob construction and parsing, structured JSON output, backup receipts,
- * batch execution, PDC targeting checks, and Sliver C2 execute-assembly
- * friendly runtime behavior.
- *
- * Core capabilities:
- *   - Enumerates ADIDNS zones and dnsNode objects across DomainDnsZones,
- *     ForestDnsZones, and System partitions.
- *   - Reads and decodes dnsRecord blobs for common DNS record types.
- *   - Creates or updates A, AAAA, CNAME, TXT, PTR, SRV, MX, and raw records.
- *   - Supports soft deletion through tombstoning and hard deletion of dnsNode
- *     objects.
- *   - Emits operator-friendly text output or machine-readable JSON receipts.
- *   - Provides dry-run validation, structured backups, script execution, and
- *     C2-oriented defaults for unattended execution contexts.
- *
- * Implementation notes:
- *   - Targets .NET Framework 4.x.
- *   - Uses only the .NET Framework standard library and System.DirectoryServices.
- *   - Implements the ADIDNS DNS_RPC_RECORD layout and DNS_COUNT_NAME encoding
- *     required for directory-backed DNS record data.
- *   - Keeps structured stdout clean in JSON mode so receipts can be collected
- *     reliably by automation or C2 tasking workflows.
- *
- * Safety and authorization:
- *   - This tool modifies directory-backed DNS data and can affect name
- *     resolution across an Active Directory environment.
- *   - Use only in authorized red-team engagements, penetration tests, internal
- *     assessments, and lab environments.
- *   - Prefer dry-run validation and backup capture before destructive or
- *     high-impact operations such as wildcard records, tombstoning, hard
- *     deletion, or updates to sensitive names such as WPAD and ISATAP.
+ * A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, 
+ * built for serious red teaming and packed with tradecraft features tailored 
+ * for Sliver C2 execute-assembly.
  */
 
 using System;
