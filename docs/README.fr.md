@@ -11,7 +11,8 @@ Outil CLI en C# pour lire et modifier les enregistrements DNS intégrés à AD v
 <p>
   <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform">
   <img src="https://img.shields.io/badge/language-C%23-239120" alt="Language">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
+  <a href="../SECURITY.md"><img src="https://img.shields.io/badge/security-policy-blue" alt="Security Policy"></a>
 </p>
 
 <p>
@@ -542,6 +543,17 @@ Données spécifiques au type :
   |     LabelCount (3)
   cchNameLength (17 = données de label incluant le 0x00 final)
 ```
+
+## Sécurité
+
+Ne publiez pas les détails d'une vulnérabilité dans une issue ou une pull
+request publique. Consultez [`SECURITY.md`](../SECURITY.md) pour le processus de
+signalement, les versions prises en charge, la divulgation coordonnée et les
+conditions de safe harbor.
+
+## Licence
+
+SharpADIDNS est publié sous licence MIT. Consultez [`LICENSE`](../LICENSE).
 
 ## Avertissement
 

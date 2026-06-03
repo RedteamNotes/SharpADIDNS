@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 RedteamNotes
 // SharpADIDNS - A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP.
 
 using System;

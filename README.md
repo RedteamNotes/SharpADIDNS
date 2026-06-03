@@ -11,7 +11,8 @@ A C# CLI tool for reading and modifying AD-Integrated DNS records over LDAP, bui
 <p>
   <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform">
   <img src="https://img.shields.io/badge/language-C%23-239120" alt="Language">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
+  <a href="SECURITY.md"><img src="https://img.shields.io/badge/security-policy-blue" alt="Security Policy"></a>
 </p>
 
 <p>
@@ -594,6 +595,16 @@ Type-specific data:
   |     LabelCount (3)
   cchNameLength (17 = label data including trailing 0x00)
 ```
+
+## Security
+
+Please do not disclose vulnerabilities in public issues or pull requests. See
+[`SECURITY.md`](SECURITY.md) for the reporting process, supported versions,
+coordinated disclosure expectations, and safe harbor terms.
+
+## License
+
+SharpADIDNS is released under the MIT License. See [`LICENSE`](LICENSE).
 
 ## Disclaimer
 

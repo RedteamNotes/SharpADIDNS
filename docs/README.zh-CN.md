@@ -11,7 +11,8 @@
 <p>
   <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform">
   <img src="https://img.shields.io/badge/language-C%23-239120" alt="Language">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
+  <a href="../SECURITY.md"><img src="https://img.shields.io/badge/security-policy-blue" alt="Security Policy"></a>
 </p>
 
 <p>
@@ -600,6 +601,15 @@ offset  size  field
   |     LabelCount (3)
   cchNameLength (17 = 标签数据含末尾 0x00 字节)
 ```
+
+## 安全反馈
+
+请不要在公开 issue 或 pull request 中披露漏洞细节。报告流程、支持版本、
+协调披露要求与安全港条款见 [`SECURITY.md`](../SECURITY.md)。
+
+## 开源许可
+
+SharpADIDNS 基于 MIT License 开源，详见 [`LICENSE`](../LICENSE)。
 
 ## 免责声明
 
