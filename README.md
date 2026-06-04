@@ -596,12 +596,6 @@ Type-specific data:
   cchNameLength (17 = label data including trailing 0x00)
 ```
 
-## Security
-
-Please do not disclose vulnerabilities in public issues or pull requests. See
-[`SECURITY.md`](SECURITY.md) for the reporting process, supported versions,
-coordinated disclosure expectations, and safe harbor terms.
-
 ## License
 
 SharpADIDNS is released under the MIT License. See [`LICENSE`](LICENSE).
